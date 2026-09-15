@@ -146,7 +146,6 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId project.group
-            artifactId project.base.archivesName.get()
             version project.version
             from components.java
         }
@@ -165,5 +164,14 @@ publishing {
                 url = file(System.getenv('ASSORTED_MAVEN')).toURI()
             }
         }
+    }
+}
+
+// The module plugins apply this one first and set base.archivesName afterwards, so reading it
+// while the publication is being declared gives the project name - common, fabric or neoforge -
+// and publishes under an id nothing resolves. Taken after evaluation, where the real name is set.
+afterEvaluate {
+    publishing.publications.named('mavenJava') {
+        artifactId = project.base.archivesName.get()
     }
 }

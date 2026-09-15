@@ -17,6 +17,12 @@ mods:
     modrinth: Kqp5OpJt
     curseforge: 426885
     slug: assorted-core
+  - name: AssortedCuisine
+    id: assortedcuisine
+    repo: grim3212/AssortedCuisine
+    modrinth:
+    curseforge:
+    slug: assorted-cuisine
   - name: AssortedDecor
     id: assorteddecor
     repo: grim3212/AssortedDecor

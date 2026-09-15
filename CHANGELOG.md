@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.2.2
+
+- Publishing named its artifacts after the Gradle project - `common`, `fabric`, `neoforge` - rather
+  than after `base.archivesName`, because the publication read the name while this plugin was being
+  applied and the module plugins set it afterwards. Nothing resolves those ids, so a
+  `publishToMavenLocal` silently left every consumer on the last good jar, and a release would have
+  published a library no mod could find. The id is taken after evaluation now.
+
 ## 26.2.1
 
 - The maven is a static site now - GitHub Pages serving grim3212/maven - and publishing is a
