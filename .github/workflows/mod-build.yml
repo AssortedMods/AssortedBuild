@@ -286,6 +286,10 @@ jobs:
 
   # The maven publish, for anything another mod builds against - AssortedLib above all. Same gate
   # as the release; the `maven` environment can carry its own reviewers.
+  #
+  # maven.grimoid.com is a static site served by GitHub Pages from grim3212/maven, so publishing
+  # is: check that repository out, publish into its mods/ directory, push. MAVEN_DEPLOY_KEY is a
+  # deploy key of that repository with write access, inherited from the calling repository.
   publish:
     name: Publish to Maven
     if: inputs.publish_maven
@@ -301,21 +305,51 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Publish
+      - name: The deploy key is set
         env:
-          MAVEN_DEPLOY_USER: ${{ secrets.MAVEN_DEPLOY_USER }}
-          MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
-          VERSION: ${{ inputs.version }}
+          MAVEN_DEPLOY_KEY: ${{ secrets.MAVEN_DEPLOY_KEY }}
         run: |
-          if [ -z "$MAVEN_DEPLOY_TOKEN" ]; then
-            echo "::error::MAVEN_DEPLOY_TOKEN is not set - the publish would silently do nothing"
+          if [ -z "$MAVEN_DEPLOY_KEY" ]; then
+            echo "::error::MAVEN_DEPLOY_KEY is not set - nothing could be pushed to grim3212/maven"
             exit 1
           fi
+
+      - name: Check out the maven
+        uses: actions/checkout@v4
+        with:
+          repository: grim3212/maven
+          ssh-key: ${{ secrets.MAVEN_DEPLOY_KEY }}
+          path: maven
+
+      - name: Publish into it
+        env:
+          ASSORTED_MAVEN: ${{ github.workspace }}/maven/mods
+          VERSION: ${{ inputs.version }}
+        run: |
           if [ -n "$VERSION" ]; then
             ./gradlew publishAllPublicationsToAssortedModsRepository "-Pversion=$VERSION" --stacktrace
           else
             ./gradlew publishAllPublicationsToAssortedModsRepository --stacktrace
           fi
+
+      # Rebases before pushing so two releases landing at once do not reject each other; their
+      # files never overlap.
+      - name: Push
+        working-directory: maven
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          published="${VERSION:-$(sed -n 's/^version=//p' ../gradle.properties)}"
+          mod_name="$(sed -n 's/^mod_name=//p' ../gradle.properties)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "$mod_name $published"
+          for attempt in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          exit 1
 
       - name: Summary
         env:
@@ -325,7 +359,7 @@ jobs:
           group="$(sed -n 's/^group=//p' gradle.properties)"
           mod_id="$(sed -n 's/^mod_id=//p' gradle.properties)"
           {
-            echo "Published \`$published\` to <https://maven.grimoid.com/#/mods/${group//.//}>"
+            echo "Published \`$published\` to <https://maven.grimoid.com/mods/${group//.//}/>. Pages serves it within about ten minutes."
             echo
             for loader in common fabric neoforge; do
               echo "- \`$group:$mod_id-$loader-<minecraft>:$published\`"

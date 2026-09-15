@@ -62,8 +62,22 @@ Local checkouts of AssortedBuild and AssortedLib are picked up from `mavenLocal(
 1. Edit `gradle/libs.versions.toml` and/or the plugins.
 2. Bump `version` in `gradle.properties` (`26.2.x` for the current Minecraft line; a new Minecraft
    version starts a new line).
-3. Run the Build workflow with `publish` ticked, or `./gradlew publish` with the maven credentials.
+3. Run the Build workflow with `publish` ticked.
 4. `fleet/fleet bump-build` moves every mod to it; `fleet/fleet status` shows who is behind.
+
+## The maven
+
+`maven.grimoid.com` is a static site: GitHub Pages serving the
+[grim3212/maven](https://github.com/grim3212/maven) repository. Nothing runs there, nothing is
+hosted at home, and there is no server to keep bot protection on. A publish - here or in a mod's
+workflow - checks that repository out, runs `maven-publish` into its `mods/` directory with
+`ASSORTED_MAVEN` pointing there (Gradle keeps every `maven-metadata.xml` current in a file
+repository), and pushes one commit named after the release. The push uses `MAVEN_DEPLOY_KEY`, a
+deploy key of that repository. Pages caches for up to ten minutes, so a release becomes resolvable
+within that.
+
+To do the same by hand: `ASSORTED_MAVEN=../maven/mods ./gradlew publishAllPublicationsToAssortedModsRepository`
+with a checkout of the maven beside this one, then commit and push it.
 
 The workflow's `template` job scaffolds a mod from `template/` and builds it against the freshly
 built plugin, so a change that breaks a mod build fails here first.

@@ -45,23 +45,6 @@ jobs:
       - name: Publish to the local maven
         run: ./gradlew publishToMavenLocal --stacktrace
 
-      # Everything below needs maven.grimoid.com from a runner: the scaffold reads the newest
-      # AssortedLib from it and the build then resolves that jar - as does every mod's own CI. It
-      # is behind Cloudflare, so a rule there that turns away datacenter clients shows up here as
-      # exactly that, with the status and headers, rather than as a build failure further down.
-      - name: maven.grimoid.com is reachable from a runner
-        run: |
-          mc="$(sed -n 's/^minecraft = "\(.*\)"/\1/p' gradle/libs.versions.toml)"
-          url="https://maven.grimoid.com/mods/com/grim3212/assorted/lib/assortedlib-common-$mc/maven-metadata.xml"
-          status="$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' "$url" || echo 'no response')"
-          echo "GET $url -> $status"
-          cat headers.txt
-          if [ "$status" != "200" ]; then
-            echo "::error::maven.grimoid.com answered $status to a runner; a Cloudflare rule is the usual reason"
-            head -c 2000 body.txt
-            exit 1
-          fi
-
       - name: Scaffold a mod
         run: fleet/fleet new "Assorted Example" example "A mod scaffolded to check the template." --into "$RUNNER_TEMP/AssortedExample"
 
@@ -69,6 +52,9 @@ jobs:
         working-directory: ${{ runner.temp }}/AssortedExample
         run: ./gradlew build --stacktrace
 
+  # maven.grimoid.com is a static site served by GitHub Pages from grim3212/maven, so publishing
+  # is: check that repository out, publish into its mods/ directory, push. MAVEN_DEPLOY_KEY is a
+  # deploy key of that repository with write access.
   publish:
     name: Publish to Maven
     if: github.event_name == 'workflow_dispatch' && inputs.publish
@@ -80,22 +66,49 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-build
 
-      - name: Publish
+      - name: The deploy key is set
         env:
-          MAVEN_DEPLOY_USER: ${{ secrets.MAVEN_DEPLOY_USER }}
-          MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
+          MAVEN_DEPLOY_KEY: ${{ secrets.MAVEN_DEPLOY_KEY }}
         run: |
-          if [ -z "$MAVEN_DEPLOY_TOKEN" ]; then
-            echo "::error::MAVEN_DEPLOY_TOKEN is not set - the publish would silently do nothing"
+          if [ -z "$MAVEN_DEPLOY_KEY" ]; then
+            echo "::error::MAVEN_DEPLOY_KEY is not set - nothing could be pushed to grim3212/maven"
             exit 1
           fi
-          ./gradlew publishAllPublicationsToAssortedModsRepository --stacktrace
+
+      - name: Check out the maven
+        uses: actions/checkout@v4
+        with:
+          repository: grim3212/maven
+          ssh-key: ${{ secrets.MAVEN_DEPLOY_KEY }}
+          path: maven
+
+      - name: Publish into it
+        env:
+          ASSORTED_MAVEN: ${{ github.workspace }}/maven/mods
+        run: ./gradlew publishAllPublicationsToAssortedModsRepository --stacktrace
+
+      # Rebases before pushing so two releases landing at once (AssortedLib and this, say) do not
+      # reject each other; their files never overlap.
+      - name: Push
+        working-directory: maven
+        run: |
+          version="$(sed -n 's/^version=//p' ../gradle.properties)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "AssortedBuild $version"
+          for attempt in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          exit 1
 
       - name: Summary
         run: |
           version="$(sed -n 's/^version=//p' gradle.properties)"
           {
-            echo "Published AssortedBuild \`$version\`. A mod picks it up by setting"
+            echo "Published AssortedBuild \`$version\` to <https://maven.grimoid.com/mods/com/grim3212/assorted/build/>."
+            echo "Pages serves it within about ten minutes. A mod picks it up by setting"
             echo
             echo "    assortedbuild_version=$version"
             echo

@@ -153,24 +153,16 @@ publishing {
     }
 
     repositories {
-        // Only declare the shared maven when local_maven is actually set; otherwise this resolved
-        // to the literal "file://null" and broke publishing.
-        if (System.getenv('local_maven') != null) {
-            maven {
-                url "file://" + System.getenv('local_maven')
-            }
-        }
-
-        // The self-hosted Reposilite. Declared only when a deploy token is present so that
-        // `publish` on a machine without one is a no-op rather than a failure.
-        if (System.getenv('MAVEN_DEPLOY_TOKEN') != null) {
+        // maven.grimoid.com is a static site served from the grim3212/maven repository, so
+        // publishing is a publish into a checkout of it followed by a push - the workflow's
+        // publish job does both. ASSORTED_MAVEN is that checkout's mods/ directory. Declared only
+        // when set, so `publish` anywhere else is a no-op rather than a failure. Gradle keeps the
+        // maven-metadata.xml files current in a file repository, which is what makes the static
+        // layout resolvable.
+        if (System.getenv('ASSORTED_MAVEN') != null) {
             maven {
                 name = 'AssortedMods'
-                url = 'https://maven.grimoid.com/mods'
-                credentials {
-                    username = System.getenv('MAVEN_DEPLOY_USER') ?: findProperty('mavenUsername')
-                    password = System.getenv('MAVEN_DEPLOY_TOKEN')
-                }
+                url = file(System.getenv('ASSORTED_MAVEN')).toURI()
             }
         }
     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 26.2.1
+
+- The maven is a static site now - GitHub Pages serving grim3212/maven - and publishing is a
+  publish into a checkout of it plus a push, with `ASSORTED_MAVEN` naming the checkout. The
+  Reposilite, its deploy token and `MAVEN_DEPLOY_TOKEN` are gone; `MAVEN_DEPLOY_KEY` (a deploy key
+  of the maven repository) replaces them in the workflows.
+- `fleet new` no longer fails where no AssortedLib checkout sits beside the repository: it asks the
+  maven for the newest one, and `--lib` overrides either.
+- The CI runner's "Permission denied" on `gradlew`, and the helper class that a bare `build` in
+  .gitignore had kept out of the repository.
+
 ## 26.2.0
 
 First release, for the Minecraft 26.2 line.
