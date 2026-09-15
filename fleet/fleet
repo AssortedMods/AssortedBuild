@@ -60,8 +60,11 @@ mod_dir() {
 }
 
 prop() {
-    # prop <file> <key>
-    sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1
+    # prop <file> <key>: the value, or nothing when the file or the key is absent. Must not fail:
+    # under `set -e -o pipefail` a failing command substitution in an assignment ends the script,
+    # and `new` legitimately runs where no sibling checkout exists (a runner).
+    [ -f "$1" ] || return 0
+    sed -n "/^$2=/{s/^$2=//p;q}" "$1"
 }
 
 build_version() {
@@ -218,19 +221,27 @@ cmd_new() {
     [ -n "$into" ] || into="$root/$repo"
     [ ! -e "$into" ] || die "$into already exists"
 
-    if [ -z "$lib" ]; then
-        lib="$(prop "$(mod_dir AssortedLib)/gradle.properties" version)"
-        [ -n "$lib" ] || lib="$(prop "$build_root/template/gradle.properties" assortedlib_version)"
-    fi
     local minecraft build
     minecraft="$(sed -n 's/^minecraft = "\(.*\)"/\1/p' "$build_root/gradle/libs.versions.toml")"
     build="$(build_version)"
 
+    # The AssortedLib a new mod starts on: --lib, else the sibling checkout's version, else the
+    # newest one published for this Minecraft version. The template holds only a placeholder.
+    if [ -z "$lib" ]; then
+        lib="$(prop "$(mod_dir AssortedLib)/gradle.properties" version)"
+    fi
+    if [ -z "$lib" ]; then
+        lib="$(curl -fsS "https://maven.grimoid.com/mods/com/grim3212/assorted/lib/assortedlib-common-$minecraft/maven-metadata.xml" 2>/dev/null \
+            | sed -n 's/.*<latest>\(.*\)<\/latest>.*/\1/p' || true)"
+    fi
+    [ -n "$lib" ] || die "cannot tell which AssortedLib to start on; pass --lib <version>"
+
     cp -R "$build_root/template" "$into"
     chmod +x "$into/gradlew"
 
-    # sed on the text files only; grep -I skips the binaries.
-    grep -rIl --exclude-dir=.git '__MOD_\|__MC__\|__ASSORTEDBUILD_VERSION__\|__ASSORTEDLIB_VERSION__' "$into" | while read -r file; do
+    # sed on the text files only; grep -I skips the binaries. `|| true` because grep exits 1 on
+    # no match, which pipefail would turn into a script exit.
+    { grep -rIl --exclude-dir=.git '__MOD_\|__MC__\|__ASSORTEDBUILD_VERSION__\|__ASSORTEDLIB_VERSION__' "$into" || true; } | while read -r file; do
         sed -i \
             -e "s|__MOD_NAME__|$name|g" \
             -e "s|__MOD_DESCRIPTION__|$description|g" \
