@@ -5,6 +5,9 @@ out
 *.iml
 .idea/*
 
-# gradle
-build
+# gradle - anchored, because the plugin's helper class lives in a package called `build`
+# (plugin/src/main/groovy/com/grim3212/assorted/build) and a bare `build` would swallow it.
+/build/
+/plugin/build/
+/catalog/build/
 .gradle
