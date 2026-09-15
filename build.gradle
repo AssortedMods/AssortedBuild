@@ -1,0 +1,30 @@
+// Both artifacts go to the same maven every mod already reads AssortedLib from, so a mod needs no
+// new repository to pick them up. Local iteration is `./gradlew publishToMavenLocal`, the same
+// step as for an unreleased AssortedLib.
+//
+// Reacts to maven-publish rather than applying it: the plugin module must apply it itself, after
+// groovy-gradle-plugin, or the plugin-marker publications are set up before the precompiled
+// scripts have registered and nothing but the bare jar gets published.
+//
+// Gradle module metadata stays on, unlike in the mods: the catalog is only importable through the
+// version-catalog variant it declares there.
+subprojects {
+    pluginManager.withPlugin('maven-publish') {
+        publishing {
+            repositories {
+                // Declared only when a deploy token is present so that `publish` on a machine
+                // without one is a no-op rather than a failure.
+                if (System.getenv('MAVEN_DEPLOY_TOKEN') != null) {
+                    maven {
+                        name = 'AssortedMods'
+                        url = 'https://maven.grimoid.com/mods'
+                        credentials {
+                            username = System.getenv('MAVEN_DEPLOY_USER') ?: findProperty('mavenUsername')
+                            password = System.getenv('MAVEN_DEPLOY_TOKEN')
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

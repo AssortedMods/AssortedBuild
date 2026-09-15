@@ -1,0 +1,52 @@
+# __MOD_NAME__
+
+__MOD_DESCRIPTION__
+
+Minecraft __MC__, on both NeoForge and Fabric from a single source tree. Requires
+[Assorted Lib](https://github.com/grim3212/AssortedLib). Branches are per Minecraft version; `__MC__`
+is the current one.
+
+## Issue Reporting
+
+Please include the following
+
+* Minecraft version
+* Loader and its version — NeoForge, or Fabric Loader together with Fabric API
+* __MOD_NAME__ version
+* Assorted Lib version
+* The full `latest.log`, plus the crash report if the game crashed
+
+## Building
+
+JDK 25 and the bundled Gradle wrapper. `common/` holds the loader-agnostic code; both loader
+modules compile those sources inline rather than depending on a common jar, so there is nothing to
+install between them.
+
+How the build works - the Minecraft and loader versions, the runs, the tests, publishing - lives in
+[AssortedBuild](https://github.com/grim3212/AssortedBuild), pinned by `assortedbuild_version` in
+`gradle.properties`. This repository only says what the mod is.
+
+Assorted Lib is consumed as a Maven artifact. To build against an unreleased one, publish it first:
+
+```bash
+cd ../AssortedLib && ./gradlew publishToMavenLocal
+```
+
+Then from this repository:
+
+```bash
+./gradlew build                        # every module; jars land in <module>/build/libs
+./gradlew :neoforge:runClient
+./gradlew :fabric:runClient
+./gradlew :neoforge:runGameTestServer  # headless gametests, non-zero exit on failure
+./gradlew :fabric:runGameTest
+./gradlew :neoforge:runClientData      # datagen
+./gradlew :neoforge:runServerData
+./gradlew :fabric:runDatagenClient
+```
+
+Generated resources are committed. Datagen output is regenerated, never hand-edited.
+
+## License
+
+[LGPL-3.0-only](LICENSE).

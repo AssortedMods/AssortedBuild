@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate for AssortedBuild itself: the one repository where a Minecraft, NeoForge, Fabric or tooling bump is wanted, because gradle/libs.versions.toml is where every mod reads them from.",
+  "extends": [
+    "config:recommended",
+    ":disableDependencyDashboard"
+  ],
+  "enabledManagers": [
+    "gradle",
+    "github-actions"
+  ],
+  "packageRules": [
+    {
+      "description": "Loader and tooling bumps are read and rolled out deliberately, never automerged.",
+      "matchManagers": ["gradle"],
+      "automerge": false
+    }
+  ]
+}

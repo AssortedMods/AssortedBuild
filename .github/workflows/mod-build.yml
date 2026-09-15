@@ -1,0 +1,333 @@
+name: Mod build
+
+# The one build pipeline for every Assorted mod. A mod's own workflow is a thin caller that
+# forwards its workflow_dispatch inputs here with `secrets: inherit`; the jobs, the checks and the
+# release steps are maintained in this file alone.
+#
+# JDK and Gradle are set up inline in every job rather than through a composite action: inside a
+# reusable workflow `uses: ./.github/actions/...` resolves against the CALLER's checkout, which no
+# longer carries one.
+on:
+  workflow_call:
+    inputs:
+      release:
+        description: Publish the built jars to Modrinth and CurseForge
+        type: boolean
+        default: false
+      publish_maven:
+        description: Publish the jars to maven.grimoid.com
+        type: boolean
+        default: false
+      release_type:
+        description: The channel a release goes out on (release, beta or alpha)
+        type: string
+        default: release
+      dry_run:
+        description: Rehearse the release without uploading anything
+        type: boolean
+        default: true
+      version:
+        description: Version to release (blank uses the one in gradle.properties)
+        type: string
+        default: ''
+      client_gametests:
+        description: Also run the Fabric client gametests (a real client, under xvfb)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      # Restores ~/.gradle and writes it back from the branch's own runs only, so a pull request
+      # reads the cache but never poisons it. Setting Minecraft up - NeoForm decompiling for the
+      # NeoForge module, Loom remapping for the Fabric one - is the bulk of every job's wall clock.
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      # Tests live in their own source set and are never an input to `jar`. A jar that ships them
+      # still works, which is why this is checked rather than trusted.
+      - name: No test classes ship in the jars
+        run: |
+          status=0
+          for jar in */build/libs/*.jar; do
+            hits=$(unzip -l "$jar" | grep -icE 'gametest|test_instance|test_box' || true)
+            if [ "$hits" != "0" ]; then
+              echo "::error::$jar ships $hits gametest entries"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Upload the jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: |
+            common/build/libs/*.jar
+            fabric/build/libs/*.jar
+            neoforge/build/libs/*.jar
+            !**/*-sources.jar
+
+  gametest:
+    name: Gametests (${{ matrix.loader }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      # Both loaders always run: which one fails is the useful half of the answer.
+      fail-fast: false
+      matrix:
+        include:
+          - loader: neoforge
+            task: ':neoforge:runGameTestServer'
+            run_dir: neoforge/run
+          - loader: fabric
+            task: ':fabric:runGameTest'
+            run_dir: fabric/build/gametest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Boots a dedicated server, runs every test_instance, exits non-zero on a failed required
+      # test.
+      - name: Run the gametests
+        run: ./gradlew ${{ matrix.task }} --stacktrace
+
+      - name: Upload the run directory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gametest-${{ matrix.loader }}
+          if-no-files-found: ignore
+          path: |
+            ${{ matrix.run_dir }}/logs/
+            ${{ matrix.run_dir }}/crash-reports/
+            ${{ matrix.run_dir }}/report.xml
+
+  datagen:
+    name: Datagen
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Catches generated output that was never regenerated and committed.
+      - name: Datagen is committed
+        run: |
+          ./gradlew :neoforge:runClientData :neoforge:runServerData :fabric:runDatagenClient --stacktrace
+          changed="$(git status --porcelain -- common/src/generated fabric/src/generated)"
+          if [ -n "$changed" ]; then
+            echo "::error::Datagen does not match what is committed"
+            echo "$changed"
+            git diff --stat -- common/src/generated fabric/src/generated
+            exit 1
+          fi
+
+  # What a dedicated server cannot see: how an item or block is actually drawn. Fabric's own docs
+  # run these as a *production* run - a real client launched against the built jars - rather than
+  # driving the dev run by hand, and Loom starts xvfb itself when CI is set, so the runner only has
+  # to have the binary. Pinned to a fixed image because it is the one job whose result depends on
+  # the GL stack underneath. Slowest and most fragile here, hence opt-in: run the workflow by hand
+  # and tick `client_gametests`. The mod has to have client_gametests_enabled=true in its
+  # gradle.properties, or the task does not exist. NeoForge has no equivalent run.
+  client-gametest:
+    name: Client gametests (fabric)
+    if: inputs.client_gametests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The docs ask only for xvfb; libgl1 is there because a missing libGL.so.1 fails inside
+      # LWJGL, where it reads as a crash rather than a missing package.
+      - name: Install xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgl1
+
+      - name: Run the client gametests
+        run: ./gradlew :fabric:runProductionClientGameTest --stacktrace
+
+      # Screenshots whatever the outcome: Fabric's client gametests take them as they go, and they
+      # are the only record of what the client actually drew.
+      - name: Upload the run directory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-gametest
+          if-no-files-found: ignore
+          path: |
+            fabric/build/run/clientGameTest/screenshots/
+            fabric/build/run/clientGameTest/logs/
+            fabric/build/run/clientGameTest/crash-reports/
+
+  # Only with the box ticked - a push must never publish. `needs` covers every other job, and a
+  # matrix `needs` waits for all of its legs, so one failed gametest on either loader skips this.
+  # The jars are rebuilt rather than downloaded from the build job's artifact: publishMods reads
+  # them from the projects that produce them.
+  release:
+    name: Release to Modrinth and CurseForge
+    if: inputs.release
+    needs: [ build, gametest, datagen ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Add required reviewers to this environment in the repository settings to gate a release
+    # behind an approval. With no protection rules it is a no-op.
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Both failures here are silent ones. A destination whose id is blank is left out of the
+      # build script entirely, and a missing token turns the whole run into a dry run - either way
+      # the job goes green having uploaded nothing. Skipped for a dry run, which is allowed to have
+      # neither.
+      - name: The release is configured
+        if: ${{ !inputs.dry_run }}
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        run: |
+          modrinth="$(sed -n 's/^modrinth_id=//p' gradle.properties)"
+          curseforge="$(sed -n 's/^curseforge_id=//p' gradle.properties)"
+          if [ -z "$modrinth" ] && [ -z "$curseforge" ]; then
+            echo "::error::neither modrinth_id nor curseforge_id is set in gradle.properties"
+            exit 1
+          fi
+
+          status=0
+          if [ -n "$modrinth" ] && [ -z "$MODRINTH_TOKEN" ]; then
+            echo "::error::modrinth_id is set but MODRINTH_TOKEN is not"
+            status=1
+          fi
+          if [ -n "$curseforge" ] && [ -z "$CURSEFORGE_TOKEN" ]; then
+            echo "::error::curseforge_id is set but CURSEFORGE_TOKEN is not"
+            status=1
+          fi
+          [ -n "$modrinth" ] || echo "::warning::modrinth_id is blank, so Modrinth is skipped"
+          [ -n "$curseforge" ] || echo "::warning::curseforge_id is blank, so CurseForge is skipped"
+          exit $status
+
+      # Everything the run is steered by reaches gradle through the environment rather than
+      # through `${{ }}` inside the script, so a crafted input cannot run as shell.
+      - name: Release
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=( "-PreleaseType=$RELEASE_TYPE" "-PdryRun=$DRY_RUN" )
+          if [ -n "$VERSION" ]; then
+            args+=( "-Pversion=$VERSION" )
+          fi
+          ./gradlew publishMods "${args[@]}" --stacktrace
+
+      # A dry run writes exactly what it would have uploaded here, which is the only way to check a
+      # release before making it. Kept for a real run too, as the record of what went out.
+      - name: Upload what was released
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          if-no-files-found: ignore
+          path: build/publishMods/
+
+      - name: Summary
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          released="${VERSION:-$(sed -n 's/^version=//p' gradle.properties)}"
+          modrinth="$(sed -n 's/^modrinth_id=//p' gradle.properties)"
+          curseforge="$(sed -n 's/^curseforge_id=//p' gradle.properties)"
+          {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "**Dry run** - nothing was uploaded. The payload is in the \`release\` artifact."
+            else
+              echo "Released \`$released\` on the \`$RELEASE_TYPE\` channel."
+            fi
+            echo
+            [ -n "$modrinth" ] && echo "- Modrinth <https://modrinth.com/mod/$modrinth>"
+            [ -n "$curseforge" ] && echo "- CurseForge <https://www.curseforge.com/projects/$curseforge>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The maven publish, for anything another mod builds against - AssortedLib above all. Same gate
+  # as the release; the `maven` environment can carry its own reviewers.
+  publish:
+    name: Publish to Maven
+    if: inputs.publish_maven
+    needs: [ build, gametest, datagen ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: maven
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Publish
+        env:
+          MAVEN_DEPLOY_USER: ${{ secrets.MAVEN_DEPLOY_USER }}
+          MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$MAVEN_DEPLOY_TOKEN" ]; then
+            echo "::error::MAVEN_DEPLOY_TOKEN is not set - the publish would silently do nothing"
+            exit 1
+          fi
+          if [ -n "$VERSION" ]; then
+            ./gradlew publishAllPublicationsToAssortedModsRepository "-Pversion=$VERSION" --stacktrace
+          else
+            ./gradlew publishAllPublicationsToAssortedModsRepository --stacktrace
+          fi
+
+      - name: Summary
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          published="${VERSION:-$(sed -n 's/^version=//p' gradle.properties)}"
+          group="$(sed -n 's/^group=//p' gradle.properties)"
+          mod_id="$(sed -n 's/^mod_id=//p' gradle.properties)"
+          {
+            echo "Published \`$published\` to <https://maven.grimoid.com/#/mods/${group//.//}>"
+            echo
+            for loader in common fabric neoforge; do
+              echo "- \`$group:$mod_id-$loader-<minecraft>:$published\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,24 @@
+pluginManagement {
+    repositories {
+        mavenLocal()
+        gradlePluginPortal()
+        maven {
+            name = 'AssortedMods'
+            url = 'https://maven.grimoid.com/mods'
+        }
+        maven {
+            name = 'Fabric'
+            url = 'https://maven.fabricmc.net/'
+        }
+        maven {
+            name = 'NeoForged'
+            url = 'https://maven.neoforged.net/releases'
+        }
+    }
+}
+
+// Everything about how this mod is built lives in AssortedBuild, pinned by assortedbuild_version
+// in gradle.properties: the Minecraft and loader versions, the module layout, the runs, publishing.
+plugins {
+    id 'com.grim3212.assorted' version "${assortedbuild_version}"
+}

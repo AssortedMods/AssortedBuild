@@ -1,0 +1,128 @@
+import com.grim3212.assorted.build.Assorted
+import me.modmuss50.mpp.ReleaseType
+
+// The root of a mod build: only the release to Modrinth and CurseForge lives here. Each module
+// applies its own convention plugin.
+plugins {
+    id 'me.modmuss50.mod-publish-plugin'
+}
+
+def minecraftVersion = Assorted.catalogVersion(project, 'minecraft')
+def hasLib = project.hasProperty('assortedlib_version')
+
+/**
+ * The release notes, in order of preference: -Pchangelog=..., the top section of CHANGELOG.md (from
+ * its first "## " heading to the next one), then a one-line default. Never generated from the git
+ * log: a changelog nobody wrote reads worse than a bare version line.
+ */
+def releaseChangelog = {
+    String provided = findProperty('changelog')
+    if (provided) {
+        return provided
+    }
+
+    File notes = rootProject.file('CHANGELOG.md')
+    if (notes.exists()) {
+        List<String> lines = notes.readLines()
+        int start = lines.findIndexOf { it.startsWith('## ') }
+        if (start >= 0) {
+            int end = lines.findIndexOf(start + 1) { it.startsWith('## ') }
+            return lines.subList(start, end < 0 ? lines.size() : end).join('\n').trim()
+        }
+    }
+
+    return "$mod_name $version for Minecraft $minecraftVersion."
+}()
+
+// Publishes the built jars to Modrinth and CurseForge, one destination per loader. Run it by hand
+// with `./gradlew publishMods`, or through the Build workflow's `release` input.
+//
+// Both tokens come from the environment. Without them - or with -PdryRun=true - the plugin writes
+// what it would have uploaded into build/publishMods rather than uploading it, so a run on a
+// machine with no credentials rehearses instead of failing. A destination whose id is blank in
+// gradle.properties is left out entirely, which the release job checks for before it starts.
+//
+// A Modrinth version number is unique within a project, so the two loaders cannot both be plain
+// `$version`; they go up as `$version+fabric` and `$version+neoforge`. CurseForge numbers nothing
+// and takes both files, told apart by their display names.
+//
+// Guarded on the loader modules existing because -PcommonOnly leaves them out of the build.
+if (findProject(':fabric') != null && findProject(':neoforge') != null) {
+    publishMods {
+        changelog = releaseChangelog
+        // Both platforms call the stable channel "release"; the plugin calls it STABLE.
+        String channel = (findProperty('releaseType') ?: findProperty('release_type') ?: 'release') as String
+        type = ReleaseType.of(channel.equalsIgnoreCase('release') ? 'stable' : channel)
+        dryRun = Boolean.parseBoolean((findProperty('dryRun') ?: 'false') as String) ||
+                (System.getenv('MODRINTH_TOKEN') == null && System.getenv('CURSEFORGE_TOKEN') == null)
+
+        String modrinthId = findProperty('modrinth_id') ?: ''
+        String curseforgeId = findProperty('curseforge_id') ?: ''
+        // AssortedLib is a hard dependency of every mod but itself, and both platforms give it the
+        // same slug.
+        String libSlug = 'assorted-lib'
+
+        if (modrinthId) {
+            def modrinthShared = modrinthOptions {
+                accessToken = providers.environmentVariable('MODRINTH_TOKEN')
+                projectId = modrinthId
+                minecraftVersions.add(minecraftVersion)
+            }
+
+            modrinth('modrinthFabric') {
+                from modrinthShared
+                file project(':fabric')
+                version = "${project.version}+fabric"
+                displayName = "$mod_name ${project.version} (Fabric)"
+                modLoaders.add('fabric')
+                requires('fabric-api')
+                if (hasLib) {
+                    requires(libSlug)
+                }
+            }
+
+            modrinth('modrinthNeoForge') {
+                from modrinthShared
+                file project(':neoforge')
+                version = "${project.version}+neoforge"
+                displayName = "$mod_name ${project.version} (NeoForge)"
+                modLoaders.add('neoforge')
+                if (hasLib) {
+                    requires(libSlug)
+                }
+            }
+        }
+
+        if (curseforgeId) {
+            def curseforgeShared = curseforgeOptions {
+                accessToken = providers.environmentVariable('CURSEFORGE_TOKEN')
+                projectId = curseforgeId
+                projectSlug = curseforge_slug
+                minecraftVersions.add(minecraftVersion)
+                client = true
+                server = true
+            }
+
+            curseforge('curseforgeFabric') {
+                from curseforgeShared
+                file project(':fabric')
+                displayName = "$mod_name ${project.version} (Fabric)"
+                modLoaders.add('fabric')
+                requires('fabric-api')
+                if (hasLib) {
+                    requires(libSlug)
+                }
+            }
+
+            curseforge('curseforgeNeoForge') {
+                from curseforgeShared
+                file project(':neoforge')
+                displayName = "$mod_name ${project.version} (NeoForge)"
+                modLoaders.add('neoforge')
+                if (hasLib) {
+                    requires(libSlug)
+                }
+            }
+        }
+    }
+}

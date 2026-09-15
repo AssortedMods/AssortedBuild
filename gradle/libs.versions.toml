@@ -1,0 +1,32 @@
+# The one place a shared version lives. Published as com.grim3212.assorted.build:catalog at this
+# repository's own version and pulled into every mod build by the settings plugin, so a bump here
+# reaches a mod when it bumps assortedbuild_version - never before.
+#
+# Per-mod versions stay in each mod's gradle.properties: its own `version`, and the
+# `assortedlib_version` it actually requires (a mod declares its minimum, not the newest).
+[versions]
+java = "25"
+minecraft = "26.2"
+minecraft-range = "[26.2]"
+neoform = "26.2-2"
+neoforge = "26.2.0.82"
+neoforge-range = "[26.2.0.82,)"
+fabric-loader = "0.19.5"
+fabric-api = "0.160.0+26.2"
+fabric-minecraft-range = "26.2"
+mixin = "0.8.7"
+jei-minecraft = "26.2"
+jei = "30.32.0.209"
+
+# Tooling. Loom is what 1.17-SNAPSHOT resolved to on the day this was pinned; a snapshot under
+# every mod at once is how one upstream push breaks the whole fleet.
+moddev = "2.0.146"
+fabric-loom = "1.17.20"
+mod-publish = "2.2.0"
+foojay = "1.0.0"
+
+[libraries]
+moddev-gradle = { module = "net.neoforged:moddev-gradle", version.ref = "moddev" }
+fabric-loom = { module = "net.fabricmc:fabric-loom", version.ref = "fabric-loom" }
+mod-publish-plugin = { module = "me.modmuss50:mod-publish-plugin", version.ref = "mod-publish" }
+foojay-resolver = { module = "org.gradle.toolchains:foojay-resolver", version.ref = "foojay" }

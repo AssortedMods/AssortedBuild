@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# The Assorted mods as one thing. Every command works over the checkouts that sit beside this
+# repository (or under $FLEET_ROOT), driven by mods.yaml. `fleet help` lists them.
+#
+# Deliberately plain bash + git + gh: it has to run from Git Bash on Windows and from a GitHub
+# runner with nothing installed.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+build_root="$(dirname "$here")"
+root="${FLEET_ROOT:-$(dirname "$build_root")}"
+manifest="$here/mods.yaml"
+
+usage() {
+    cat <<'EOF'
+fleet - the Assorted mods as one thing
+
+  fleet list                        the mods in mods.yaml
+  fleet status                      branch, dirt and versions of every checkout; who is behind
+  fleet clone                       clone whichever mods are missing beside AssortedBuild
+  fleet exec <command...>           run a command in every checkout (fleet exec git pull)
+  fleet bump-build [<version>]      set assortedbuild_version everywhere (default: this repo's)
+  fleet pr <branch> <message>       in every dirty checkout: branch, commit, push, open a PR
+  fleet release <mod|all> [flags]   dispatch the Build workflow; a dry run unless --real
+        --real  --type <release|beta|alpha>  --version <v>  --client-gametests  --publish-maven
+        --ref <branch>   (default: the checkout's current branch)
+  fleet new <"Mod Name"> <short> <"description"> [--into <dir>] [--lib <version>]
+                                    scaffold a mod from template/, e.g.
+                                    fleet new "Assorted Example" example "Adds an example."
+
+Checkouts are looked for at $FLEET_ROOT/<name>, defaulting to the directory above this one.
+EOF
+}
+
+die() {
+    echo "fleet: $*" >&2
+    exit 1
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 is not installed$2"
+}
+
+# mods.yaml as TSV: name, id, repo, modrinth, curseforge, slug.
+mods() {
+    awk '
+        function emit() { if (name) printf "%s\t%s\t%s\t%s\t%s\t%s\n", name, id, repo, modrinth, curseforge, slug }
+        /^  - name:/    { emit(); name = $3; id = repo = modrinth = curseforge = slug = ""; next }
+        /^    id:/       { id = $2 }
+        /^    repo:/     { repo = $2 }
+        /^    modrinth:/ { modrinth = $2 }
+        /^    curseforge:/ { curseforge = $2 }
+        /^    slug:/     { slug = $2 }
+        END              { emit() }
+    ' "$manifest"
+}
+
+mod_dir() {
+    echo "$root/$1"
+}
+
+prop() {
+    # prop <file> <key>
+    sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1
+}
+
+build_version() {
+    prop "$build_root/gradle.properties" version
+}
+
+cmd_list() {
+    printf '%-16s %-16s %-26s %-10s %-8s %s\n' NAME ID REPO MODRINTH CURSE SLUG
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        printf '%-16s %-16s %-26s %-10s %-8s %s\n' "$name" "$id" "$repo" "$modrinth" "$curseforge" "$slug"
+    done
+}
+
+cmd_status() {
+    local current
+    current="$(build_version)"
+    echo "AssortedBuild $current"
+    printf '%-16s %-22s %-6s %-9s %-9s %-9s %s\n' MOD BRANCH DIRTY VERSION BUILD LIB NOTE
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        local dir branch dirty version build lib note
+        dir="$(mod_dir "$name")"
+        if [ ! -d "$dir/.git" ]; then
+            printf '%-16s %s\n' "$name" "(not checked out - fleet clone)"
+            continue
+        fi
+        branch="$(git -C "$dir" branch --show-current)"
+        dirty="$(git -C "$dir" status --porcelain | wc -l | tr -d ' ')"
+        version="$(prop "$dir/gradle.properties" version)"
+        build="$(prop "$dir/gradle.properties" assortedbuild_version)"
+        lib="$(prop "$dir/gradle.properties" assortedlib_version)"
+        note=""
+        [ -z "$build" ] && note="not on AssortedBuild"
+        [ -n "$build" ] && [ "$build" != "$current" ] && note="behind ($current)"
+        printf '%-16s %-22s %-6s %-9s %-9s %-9s %s\n' "$name" "$branch" "$dirty" "$version" "${build:--}" "${lib:--}" "$note"
+    done
+}
+
+cmd_clone() {
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        local dir
+        dir="$(mod_dir "$name")"
+        if [ -d "$dir/.git" ]; then
+            echo "$name: present"
+        else
+            echo "$name: cloning $repo"
+            git clone "https://github.com/$repo.git" "$dir"
+        fi
+    done
+}
+
+cmd_exec() {
+    [ $# -gt 0 ] || die "exec needs a command"
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        local dir
+        dir="$(mod_dir "$name")"
+        [ -d "$dir" ] || continue
+        echo "==> $name"
+        (cd "$dir" && "$@") || echo "fleet: $name: exit $?" >&2
+    done
+}
+
+cmd_bump_build() {
+    local version="${1:-$(build_version)}"
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        local dir file
+        dir="$(mod_dir "$name")"
+        file="$dir/gradle.properties"
+        [ -f "$file" ] || continue
+        if grep -q '^assortedbuild_version=' "$file"; then
+            sed -i "s/^assortedbuild_version=.*/assortedbuild_version=$version/" "$file"
+            echo "$name: assortedbuild_version=$version"
+        else
+            echo "$name: not on AssortedBuild, skipped"
+        fi
+    done
+}
+
+cmd_pr() {
+    need gh " - https://cli.github.com"
+    local branch="${1:-}" message="${2:-}"
+    [ -n "$branch" ] && [ -n "$message" ] || die "pr needs a branch name and a commit message"
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        local dir base
+        dir="$(mod_dir "$name")"
+        [ -d "$dir/.git" ] || continue
+        if [ -z "$(git -C "$dir" status --porcelain)" ]; then
+            echo "$name: clean, skipped"
+            continue
+        fi
+        base="$(git -C "$dir" branch --show-current)"
+        echo "==> $name: $base -> $branch"
+        git -C "$dir" checkout -q -b "$branch"
+        git -C "$dir" add -A
+        git -C "$dir" commit -q -m "$message"
+        git -C "$dir" push -q -u origin "$branch"
+        gh pr create -R "$repo" --base "$base" --head "$branch" --title "$message" --body "$message"
+    done
+}
+
+cmd_release() {
+    need gh " - https://cli.github.com"
+    local target="${1:-}"
+    [ -n "$target" ] || die "release needs a mod name or 'all'"
+    shift
+    local dry_run=true type=release version="" client=false maven=false ref=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --real) dry_run=false ;;
+            --type) type="$2"; shift ;;
+            --version) version="$2"; shift ;;
+            --client-gametests) client=true ;;
+            --publish-maven) maven=true ;;
+            --ref) ref="$2"; shift ;;
+            *) die "release: unknown flag $1" ;;
+        esac
+        shift
+    done
+    mods | while IFS=$'\t' read -r name id repo modrinth curseforge slug; do
+        [ "$target" = all ] || [ "$target" = "$name" ] || continue
+        local dir use_ref
+        dir="$(mod_dir "$name")"
+        use_ref="$ref"
+        [ -n "$use_ref" ] || use_ref="$(git -C "$dir" branch --show-current 2>/dev/null || true)"
+        [ -n "$use_ref" ] || die "$name: no --ref and no checkout to read the branch from"
+        echo "==> $name ($repo@$use_ref) release dry_run=$dry_run type=$type version='${version}'"
+        gh workflow run build.yml -R "$repo" --ref "$use_ref" \
+            -f release=true -f dry_run="$dry_run" -f release_type="$type" -f version="$version" \
+            -f client_gametests="$client" -f publish_maven="$maven"
+    done
+}
+
+# Replaces every placeholder in a scaffolded tree: file contents first (text files only - the
+# wrapper jar and the logo must not be touched), then the path segments.
+cmd_new() {
+    local name="${1:-}" short="${2:-}" description="${3:-}"
+    [ -n "$name" ] && [ -n "$short" ] && [ -n "$description" ] || die "new needs a name, a short id and a description"
+    shift 3
+    local into="" lib=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --into) into="$2"; shift ;;
+            --lib) lib="$2"; shift ;;
+            *) die "new: unknown flag $1" ;;
+        esac
+        shift
+    done
+    [[ "$short" =~ ^[a-z][a-z0-9]*$ ]] || die "the short id must be lowercase letters and digits, like 'tools'"
+
+    local class repo id pkg
+    class="$(tr '[:lower:]' '[:upper:]' <<<"${short:0:1}")${short:1}"
+    repo="Assorted$class"
+    id="assorted$short"
+    pkg="$short"
+    [ -n "$into" ] || into="$root/$repo"
+    [ ! -e "$into" ] || die "$into already exists"
+
+    if [ -z "$lib" ]; then
+        lib="$(prop "$(mod_dir AssortedLib)/gradle.properties" version)"
+        [ -n "$lib" ] || lib="$(prop "$build_root/template/gradle.properties" assortedlib_version)"
+    fi
+    local minecraft build
+    minecraft="$(sed -n 's/^minecraft = "\(.*\)"/\1/p' "$build_root/gradle/libs.versions.toml")"
+    build="$(build_version)"
+
+    cp -R "$build_root/template" "$into"
+    chmod +x "$into/gradlew"
+
+    # sed on the text files only; grep -I skips the binaries.
+    grep -rIl --exclude-dir=.git '__MOD_\|__MC__\|__ASSORTEDBUILD_VERSION__\|__ASSORTEDLIB_VERSION__' "$into" | while read -r file; do
+        sed -i \
+            -e "s|__MOD_NAME__|$name|g" \
+            -e "s|__MOD_DESCRIPTION__|$description|g" \
+            -e "s|__MOD_REPO__|$repo|g" \
+            -e "s|__MOD_CLASS__|$class|g" \
+            -e "s|__MOD_ID__|$id|g" \
+            -e "s|__MOD_PKG__|$pkg|g" \
+            -e "s|__MC__|$minecraft|g" \
+            -e "s|__ASSORTEDBUILD_VERSION__|$build|g" \
+            -e "s|__ASSORTEDLIB_VERSION__|$lib|g" \
+            "$file"
+    done
+
+    # Paths: deepest first so a renamed parent never invalidates a child's path.
+    find "$into" -depth -name '*__MOD_*' | while read -r path; do
+        local base new
+        base="$(basename "$path")"
+        new="${base//__MOD_REPO__/$repo}"
+        new="${new//__MOD_CLASS__/$class}"
+        new="${new//__MOD_PKG__/$pkg}"
+        new="${new//__MOD_ID__/$id}"
+        [ "$new" != "$base" ] && mv "$path" "$(dirname "$path")/$new"
+    done
+
+    git -C "$into" init -q -b "$minecraft"
+
+    cat <<EOF
+Scaffolded $name in $into
+  mod id      $id
+  package     com.grim3212.assorted.$pkg
+  classes     ${class}CommonMod, ${repo}Fabric, ${repo}NeoForge, ...
+  AssortedLib >= $lib, AssortedBuild $build, Minecraft $minecraft
+
+Next:
+  1. Replace common/src/main/resources/logo.png.
+  2. Create github.com/grim3212/$repo, then set modrinth_id and curseforge_id in gradle.properties
+     once those projects exist (blank ids publish nowhere).
+  3. Add it to fleet/mods.yaml.
+  4. cd $into && ./gradlew build
+EOF
+}
+
+case "${1:-help}" in
+    list) shift; cmd_list "$@" ;;
+    status) shift; cmd_status "$@" ;;
+    clone) shift; cmd_clone "$@" ;;
+    exec) shift; cmd_exec "$@" ;;
+    bump-build) shift; cmd_bump_build "$@" ;;
+    pr) shift; cmd_pr "$@" ;;
+    release) shift; cmd_release "$@" ;;
+    new) shift; cmd_new "$@" ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; exit 1 ;;
+esac

@@ -1,0 +1,36 @@
+plugins {
+    id 'groovy-gradle-plugin'
+    id 'maven-publish'
+}
+
+// The loader plugins are dependencies of this jar, so a mod's settings only names one plugin and
+// gets the pinned MDG, Loom and mod-publish-plugin versions with it.
+repositories {
+    gradlePluginPortal()
+    mavenCentral()
+    maven {
+        name = 'Fabric'
+        url = 'https://maven.fabricmc.net/'
+    }
+    maven {
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
+}
+
+dependencies {
+    implementation libs.moddev.gradle
+    implementation libs.fabric.loom
+    implementation libs.mod.publish.plugin
+    implementation libs.foojay.resolver
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(libs.versions.java.get() as int)
+
+// The settings plugin reads its own version from this to fetch the matching catalog.
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('assortedbuild.properties') {
+        expand version: project.version
+    }
+}

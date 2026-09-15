@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset for every Assorted mod. A mod's renovate.json extends github>grim3212/AssortedBuild//renovate/default and nothing else.",
+  "extends": [
+    "config:recommended",
+    ":disableDependencyDashboard"
+  ],
+  "enabledManagers": [
+    "gradle",
+    "github-actions"
+  ],
+  "packageRules": [
+    {
+      "description": "The build itself: plugin and catalog move together, and a bump is the whole point of Renovate here.",
+      "matchPackageNames": ["com.grim3212.assorted.build:plugin", "com.grim3212.assorted.build:catalog", "com.grim3212.assorted"],
+      "groupName": "AssortedBuild",
+      "automerge": false
+    },
+    {
+      "description": "assortedlib_version is a mod's declared minimum, not a version to chase. Bumped by hand when the mod needs something newer.",
+      "matchPackageNames": ["/^com\\.grim3212\\.assorted\\.lib:/"],
+      "enabled": false
+    },
+    {
+      "description": "Minecraft, NeoForge, Fabric, JEI: these live in AssortedBuild's catalog, so a mod never gets a PR for them.",
+      "matchPackageNames": ["/^net\\.neoforged/", "/^net\\.fabricmc/", "/^mezz\\.jei/", "/^com\\.mojang/", "/^org\\.spongepowered/"],
+      "enabled": false
+    }
+  ]
+}

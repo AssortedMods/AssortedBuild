@@ -1,0 +1,20 @@
+plugins {
+    id 'version-catalog'
+    id 'maven-publish'
+}
+
+// Publishes gradle/libs.versions.toml as-is. The settings plugin imports it into every mod at the
+// version of the plugin jar, so the two can never disagree.
+catalog {
+    versionCatalog {
+        from(files('../gradle/libs.versions.toml'))
+    }
+}
+
+publishing {
+    publications {
+        catalog(MavenPublication) {
+            from components.versionCatalog
+        }
+    }
+}

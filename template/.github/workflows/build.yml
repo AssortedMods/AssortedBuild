@@ -1,0 +1,62 @@
+name: Build
+
+# The pipeline itself lives in AssortedBuild (mod-build.yml); this only forwards the inputs.
+#
+# Manual only for now, until the pipeline has been run by hand a few times. Add back
+#   push:
+#     branches: [ 26.2 ]
+#   pull_request:
+#     branches: [ 26.2 ]
+# above workflow_dispatch to have it run on its own.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish the built jars to Modrinth and CurseForge
+        type: boolean
+        default: false
+      publish_maven:
+        description: Publish the jars to maven.grimoid.com
+        type: boolean
+        default: false
+      release_type:
+        description: The channel a release goes out on
+        type: choice
+        options: [ release, beta, alpha ]
+        default: release
+      dry_run:
+        description: Rehearse the release without uploading anything
+        type: boolean
+        default: true
+      version:
+        description: Version to release (blank uses the one in gradle.properties)
+        type: string
+        default: ''
+      client_gametests:
+        description: Also run the Fabric client gametests (a real client, under xvfb)
+        type: boolean
+        default: false
+
+# Every job sets Minecraft up from scratch, so a newer run on the same ref makes the running one a
+# waste of a runner. Keyed on the event too, so a push never cancels a manual run once triggers
+# are back on.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mod:
+    uses: grim3212/AssortedBuild/.github/workflows/mod-build.yml@main
+    # inputs.* are empty outside workflow_dispatch, and an empty string coerces equal to false in
+    # these expressions, so each boolean is gated on the event rather than defaulted.
+    with:
+      release: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+      publish_maven: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_maven }}
+      release_type: ${{ inputs.release_type || 'release' }}
+      dry_run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
+      version: ${{ inputs.version }}
+      client_gametests: ${{ github.event_name == 'workflow_dispatch' && inputs.client_gametests }}
+    secrets: inherit

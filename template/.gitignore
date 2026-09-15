@@ -1,0 +1,35 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea/*
+!.idea/scopes
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+runserver
+
+logs
+
+# Data Generator cache
+forge/src/generated/resources/.cache
+common/src/generated/resources/.cache
+fabric/src/generated/resources/.cache
+
+# Datagen hash caches - regenerated output, not source
+common/src/generated/client/.cache/
+common/src/generated/server/.cache/

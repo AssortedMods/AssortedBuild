@@ -1,0 +1,159 @@
+import com.grim3212.assorted.build.Assorted
+
+plugins {
+    id 'com.grim3212.assorted.java'
+    id 'net.neoforged.moddev'
+}
+
+base.archivesName = "${mod_id}-neoforge-${minecraft_version}"
+
+def hasLib = project.hasProperty('assortedlib_version')
+
+neoForge {
+    version = neoforge_version
+
+    if (Assorted.flag(project, 'neoforge_ats_enabled')) {
+        accessTransformers.from('src/main/resources/META-INF/accesstransformer.cfg')
+    }
+
+    // NeoForge has shipped official mappings at runtime since 1.20.5, so mixin refmaps are no
+    // longer generated or needed. mixingradle is gone with them.
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+            sourceSet project(':common').sourceSets.main
+            // Development only. This source set is not an input to `jar`, so nothing here ships;
+            // it is listed so a dev run can see the test classes and the test_instance jsons.
+            sourceSet sourceSets.gametest
+        }
+    }
+
+    runs {
+        client {
+            client()
+            gameDirectory = project.file('run')
+        }
+
+        server {
+            server()
+            gameDirectory = project.file('run')
+            programArgument '--nogui'
+        }
+
+        // Two data runs with SEPARATE output roots. GatherDataEvent split into .Client and .Server,
+        // MDG 2.x has no combined run type, and each run prunes anything in its output it did not
+        // generate - pointing both at one tree made the second delete the first's output.
+        clientData {
+            clientData()
+            gameDirectory = project.file('run')
+            programArguments.addAll '--mod', mod_id, '--all',
+                    '--output', file('../common/src/generated/client/').getAbsolutePath(),
+                    '--existing', file('../common/src/main/resources/').getAbsolutePath()
+        }
+
+        serverData {
+            serverData()
+            gameDirectory = project.file('run')
+            programArguments.addAll '--mod', mod_id, '--all',
+                    '--output', file('../common/src/generated/server/').getAbsolutePath(),
+                    '--existing', file('../common/src/main/resources/').getAbsolutePath()
+        }
+
+        // Headless gametest run: boots a server, runs every test_instance, exits non-zero on
+        // failure. The run type comes from NeoForge's own userdev config, so there is no
+        // convenience method for it the way there is for client()/server().
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = project.file('run')
+        }
+
+        // Renders every item icon into build/icons for the documentation site, then quits. The
+        // exporter is IconExporter in AssortedLib; it is inert without the property, and the images
+        // land under build, so nothing about this run reaches the jar. The stacks file is the site's
+        // list of component-dependent variants and is simply ignored when absent; -Picon_stacks_file
+        // points it somewhere other than a sibling checkout of the site.
+        exportIcons {
+            client()
+            gameDirectory = project.file('run')
+            systemProperty 'assortedlib.exportIcons', file('build/icons').absolutePath
+            def stacks = project.findProperty('icon_stacks_file') ?: '../assorted-mods-site/scripts/recipes/icon-stacks.json'
+            systemProperty 'assortedlib.exportIcons.stacks', rootProject.file(stacks).absolutePath
+        }
+
+        configureEach {
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+}
+
+// The NeoForge datagen owns the shared output - it is the side with the model providers - and
+// writes into common so BOTH loaders can consume it. Two roots because client and server datagen
+// write separately and each prunes only its own tree; Minecraft merges resource roots.
+sourceSets.main.resources {
+    srcDir '../common/src/generated/client'
+    srcDir '../common/src/generated/server'
+    exclude '**/.cache'
+}
+
+dependencies {
+    compileOnly project(':common')
+
+    if (Assorted.flag(project, 'jei_enabled')) {
+        implementation "mezz.jei:jei-${jei_minecraft_version}-neoforge:${jei_version}"
+    }
+
+    if (hasLib) {
+        implementation "com.grim3212.assorted.lib:assortedlib-neoforge-${minecraft_version}:${assortedlib_version}"
+    }
+}
+
+// Only the main compile takes common's sources. configureEach fed them to compileTestJava too,
+// which has no Minecraft on its classpath, and that is what made `./gradlew build` fail.
+tasks.named('compileJava') {
+    source(project(':common').sourceSets.main.allSource)
+}
+
+tasks.named('compileGametestJava') {
+    source(project(':common').sourceSets.gametest.allSource)
+}
+
+tasks.named('processGametestResources') {
+    from project(':common').sourceSets.gametest.resources
+}
+
+// neoforge.mods.toml is templated out of src/main/templates, matching the modern MDK layout.
+tasks.register('generateModMetadata', ProcessResources) {
+    def replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neoforge_version       : neoforge_version,
+            neoforge_version_range : neoforge_version_range,
+            assortedlib_version    : project.findProperty('assortedlib_version') ?: '',
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_author             : mod_author,
+            mod_description        : mod_description,
+            issue_tracker          : issue_tracker,
+            license                : license,
+            version                : version,
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into "${layout.buildDirectory.get()}/generated/sources/modMetadata"
+}
+sourceSets.main.resources.srcDir tasks.named('generateModMetadata')
+neoForge.ideSyncTask tasks.named('generateModMetadata')
+
+processResources {
+    from project(':common').sourceSets.main.resources
+    duplicatesStrategy(DuplicatesStrategy.FAIL)
+    exclude '.cache'
+    exclude "${mod_id}_common.accesswidener"
+
+    // Expanded in place rather than via a follow-up Copy task: writing into build/resources/main
+    // from a second task made :jar consume an output it did not declare a dependency on.
+    filesMatching('pack.mcmeta') {
+        expand 'mod_name': mod_name
+    }
+}

@@ -1,0 +1,47 @@
+import com.grim3212.assorted.build.Assorted
+
+// The loader-agnostic module. Compiles against plain, deobfuscated Minecraft through ModDevGradle's
+// "vanilla mode" (NeoForm, no loader), which replaced the unmaintained VanillaGradle.
+plugins {
+    id 'com.grim3212.assorted.java'
+    id 'net.neoforged.moddev'
+}
+
+base.archivesName = "${mod_id}-common-${minecraft_version}"
+
+neoForge {
+    neoFormVersion = neoform_version
+
+    // Off by default: the loader modules are what actually get run.
+    runs {
+        if (Assorted.flag(project, 'common_runs_enabled')) {
+            client {
+                client()
+                gameDirectory = project.file('run')
+            }
+            server {
+                server()
+                gameDirectory = project.file('run')
+            }
+        }
+    }
+}
+
+dependencies {
+    compileOnly "org.spongepowered:mixin:${mixin_version}"
+
+    if (Assorted.flag(project, 'jei_enabled')) {
+        compileOnly "mezz.jei:jei-${jei_minecraft_version}-common-api:${jei_version}"
+    }
+
+    // Absent only in AssortedLib itself.
+    if (project.hasProperty('assortedlib_version')) {
+        compileOnly "com.grim3212.assorted.lib:assortedlib-common-${minecraft_version}:${assortedlib_version}"
+    }
+}
+
+processResources {
+    filesMatching('pack.mcmeta') {
+        expand 'mod_name': mod_name
+    }
+}

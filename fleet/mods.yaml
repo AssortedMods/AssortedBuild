@@ -1,0 +1,49 @@
+# Every Assorted mod, in dependency order: AssortedLib first, because everything else builds
+# against it. `fleet` reads this and nothing else should keep its own list - a new mod is added
+# here (fleet new does it) and every fleet command knows about it.
+#
+# Shape matters: fleet parses it with awk, so keep one mod per `- name:` block, one `key: value`
+# per line, no nesting beyond this.
+mods:
+  - name: AssortedLib
+    id: assortedlib
+    repo: grim3212/AssortedLib
+    modrinth: KkmxwW72
+    curseforge: 851677
+    slug: assorted-lib
+  - name: AssortedCore
+    id: assortedcore
+    repo: grim3212/AssortedCore
+    modrinth: Kqp5OpJt
+    curseforge: 426885
+    slug: assorted-core
+  - name: AssortedDecor
+    id: assorteddecor
+    repo: grim3212/AssortedDecor
+    modrinth: DyXZJYKu
+    curseforge: 416069
+    slug: assorted-decor
+  - name: AssortedStorage
+    id: assortedstorage
+    repo: grim3212/AssortedStorage
+    modrinth: RY5hZOKH
+    curseforge: 408724
+    slug: assorted-storage
+  - name: AssortedTech
+    id: assortedtech
+    repo: grim3212/AssortedTech
+    modrinth: rP02pNs4
+    curseforge: 514337
+    slug: assorted-tech
+  - name: AssortedTools
+    id: assortedtools
+    repo: grim3212/AssortedTools
+    modrinth: S9DUh1tA
+    curseforge: 409802
+    slug: assorted-tools
+  - name: AssortedWorld
+    id: assortedworld
+    repo: grim3212/AssortedWorld
+    modrinth: ChPOe1eg
+    curseforge: 487694
+    slug: assorted-world

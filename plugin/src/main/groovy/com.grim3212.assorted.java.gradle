@@ -1,0 +1,177 @@
+import com.grim3212.assorted.build.Assorted
+
+// Everything the three modules share: the toolchain, the repositories, the jar manifest, the
+// gametest source set and maven publishing. The module plugins apply this first.
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'idea'
+}
+
+// The catalog's versions as project properties, so a mod's own script and the metadata templates
+// keep writing ${minecraft_version} the way they always have.
+ext {
+    minecraft_version = Assorted.catalogVersion(project, 'minecraft')
+    minecraft_version_range = Assorted.catalogVersion(project, 'minecraft-range')
+    neoform_version = Assorted.catalogVersion(project, 'neoform')
+    neoforge_version = Assorted.catalogVersion(project, 'neoforge')
+    neoforge_version_range = Assorted.catalogVersion(project, 'neoforge-range')
+    fabric_loader_version = Assorted.catalogVersion(project, 'fabric-loader')
+    fabric_version = Assorted.catalogVersion(project, 'fabric-api')
+    fabric_mc_version_range = Assorted.catalogVersion(project, 'fabric-minecraft-range')
+    mixin_version = Assorted.catalogVersion(project, 'mixin')
+    jei_minecraft_version = Assorted.catalogVersion(project, 'jei-minecraft')
+    jei_version = Assorted.catalogVersion(project, 'jei')
+}
+
+def javaVersion = Assorted.catalogVersion(project, 'java') as int
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(javaVersion)
+    withSourcesJar()
+}
+
+jar {
+    from(rootProject.file('LICENSE'))
+    from(rootProject.file('README.md'))
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_name,
+                'Specification-Vendor'    : mod_author,
+                'Specification-Version'   : archiveVersion,
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : archiveVersion,
+                'Implementation-Vendor'   : mod_author,
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                'Timestamp'               : System.currentTimeMillis(),
+                'Built-On-Java'           : "${System.getProperty('java.vm.version')} (${System.getProperty('java.vm.vendor')})",
+                'Build-On-Minecraft'      : minecraft_version
+        ])
+    }
+}
+
+sourcesJar {
+    from(rootProject.file('LICENSE'))
+    from(rootProject.file('README.md'))
+}
+
+repositories {
+    // Picks up an AssortedLib built locally with
+    //   cd ../AssortedLib && ./gradlew publishToMavenLocal
+    // which is how you test an unreleased change to it. Remote AssortedMods below is the
+    // source for every published version, and the only one CI uses.
+    mavenLocal()
+
+    mavenCentral()
+
+    maven {
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
+
+    maven {
+        name = 'Sponge / Mixin'
+        url = 'https://repo.spongepowered.org/repository/maven-public/'
+        content {
+            excludeGroupByRegex 'net\\.minecraft.*'
+            excludeGroupByRegex 'net\\.fabricmc.*'
+            excludeGroupByRegex 'net\\.neoforged.*'
+        }
+    }
+
+    maven {
+        name = 'BlameJared Maven (CrT / Bookshelf)'
+        url = 'https://maven.blamejared.com'
+        content {
+            excludeGroupByRegex 'net\\.minecraft.*'
+            excludeGroupByRegex 'net\\.fabricmc.*'
+            excludeGroupByRegex 'net\\.neoforged.*'
+        }
+    }
+
+    maven {
+        name = 'ModMaven'
+        url = 'https://modmaven.dev'
+        content {
+            excludeGroupByRegex 'net\\.minecraft.*'
+            excludeGroupByRegex 'net\\.fabricmc.*'
+            excludeGroupByRegex 'net\\.neoforged.*'
+        }
+    }
+
+    maven {
+        name = 'AssortedMods'
+        url = 'https://maven.grimoid.com/mods'
+        content {
+            excludeGroupByRegex 'net\\.minecraft.*'
+            excludeGroupByRegex 'net\\.fabricmc.*'
+            excludeGroupByRegex 'net\\.neoforged.*'
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = javaVersion
+    // A port produces far more than javac's default 100-error cap.
+    it.options.compilerArgs << '-Xmaxerrs' << '10000'
+    // Policy: no deprecated APIs. Surface them by name rather than as a summary note.
+    it.options.compilerArgs << '-Xlint:deprecation'
+}
+
+// No javadoc jar is published - the sources jar already gives consumers IDE docs at a twentieth of
+// the size. This only shapes a manual `gradlew javadoc`, which trips doclint constantly on
+// Minecraft-derived sources.
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    failOnError = false
+}
+
+// Disables Gradle's custom module metadata from being published to maven. The metadata includes
+// mapped dependencies which are not reasonably consumable by other mod developers.
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = false
+}
+
+// Gametests, in their own source set so they can never reach the published jar. Only the loader
+// modules build them; in common this is where they live, compiled against common's main output.
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId project.group
+            artifactId project.base.archivesName.get()
+            version project.version
+            from components.java
+        }
+    }
+
+    repositories {
+        // Only declare the shared maven when local_maven is actually set; otherwise this resolved
+        // to the literal "file://null" and broke publishing.
+        if (System.getenv('local_maven') != null) {
+            maven {
+                url "file://" + System.getenv('local_maven')
+            }
+        }
+
+        // The self-hosted Reposilite. Declared only when a deploy token is present so that
+        // `publish` on a machine without one is a no-op rather than a failure.
+        if (System.getenv('MAVEN_DEPLOY_TOKEN') != null) {
+            maven {
+                name = 'AssortedMods'
+                url = 'https://maven.grimoid.com/mods'
+                credentials {
+                    username = System.getenv('MAVEN_DEPLOY_USER') ?: findProperty('mavenUsername')
+                    password = System.getenv('MAVEN_DEPLOY_TOKEN')
+                }
+            }
+        }
+    }
+}

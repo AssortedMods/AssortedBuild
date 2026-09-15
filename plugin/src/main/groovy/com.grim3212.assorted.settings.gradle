@@ -1,0 +1,35 @@
+import com.grim3212.assorted.build.Assorted
+
+// The settings half of a mod build (plugin id com.grim3212.assorted - the .settings.gradle suffix is
+// what marks this file as a settings plugin): toolchain download, the shared version catalog, and the module
+// layout. A mod's settings.gradle applies this and nothing else.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention'
+}
+
+rootProject.name = providers.gradleProperty('mod_name').get()
+
+dependencyResolutionManagement {
+    // Only the catalog resolves here; each module declares its own repositories, which Gradle
+    // prefers over these. mavenLocal is for an AssortedBuild published locally.
+    repositories {
+        mavenLocal()
+        maven {
+            name = 'AssortedMods'
+            url = 'https://maven.grimoid.com/mods'
+        }
+    }
+    versionCatalogs {
+        libs {
+            from("com.grim3212.assorted.build:catalog:${Assorted.buildVersion()}")
+        }
+    }
+}
+
+// The loader modules cannot resolve their AssortedLib artifact until it is published, so
+// `-PcommonOnly` builds just the common module without anyone having to edit a file.
+if (startParameter.projectProperties.containsKey('commonOnly')) {
+    include 'common'
+} else {
+    include 'common', 'fabric', 'neoforge'
+}

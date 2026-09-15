@@ -1,0 +1,86 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the plugin and catalog to maven.grimoid.com once the checks pass
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-build
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+  # The only real test of the plugin is a mod built with it. Scaffolds one from the template
+  # against the plugin published to the runner's local maven, and builds it end to end - the
+  # Minecraft setup included, which is why it has its own hour.
+  template:
+    name: Template builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-build
+
+      - name: Publish to the local maven
+        run: ./gradlew publishToMavenLocal --stacktrace
+
+      - name: Scaffold a mod
+        run: fleet/fleet new "Assorted Example" example "A mod scaffolded to check the template." --into "$RUNNER_TEMP/AssortedExample"
+
+      - name: Build it
+        working-directory: ${{ runner.temp }}/AssortedExample
+        run: ./gradlew build --stacktrace
+
+  publish:
+    name: Publish to Maven
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [ build, template ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: maven
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-build
+
+      - name: Publish
+        env:
+          MAVEN_DEPLOY_USER: ${{ secrets.MAVEN_DEPLOY_USER }}
+          MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$MAVEN_DEPLOY_TOKEN" ]; then
+            echo "::error::MAVEN_DEPLOY_TOKEN is not set - the publish would silently do nothing"
+            exit 1
+          fi
+          ./gradlew publishAllPublicationsToAssortedModsRepository --stacktrace
+
+      - name: Summary
+        run: |
+          version="$(sed -n 's/^version=//p' gradle.properties)"
+          {
+            echo "Published AssortedBuild \`$version\`. A mod picks it up by setting"
+            echo
+            echo "    assortedbuild_version=$version"
+            echo
+            echo "in its gradle.properties, or \`fleet/fleet bump-build $version\` does it for all of them."
+          } >> "$GITHUB_STEP_SUMMARY"

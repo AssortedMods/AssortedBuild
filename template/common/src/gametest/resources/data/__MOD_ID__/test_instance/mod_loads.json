@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "__MOD_ID__:mod_loads",
+  "structure": "__MOD_ID__:test_box",
+  "max_ticks": 1,
+  "setup_ticks": 0,
+  "required": true
+}
