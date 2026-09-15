@@ -231,8 +231,15 @@ cmd_new() {
         lib="$(prop "$(mod_dir AssortedLib)/gradle.properties" version)"
     fi
     if [ -z "$lib" ]; then
-        lib="$(curl -fsS "https://maven.grimoid.com/mods/com/grim3212/assorted/lib/assortedlib-common-$minecraft/maven-metadata.xml" 2>/dev/null \
-            | sed -n 's/.*<latest>\(.*\)<\/latest>.*/\1/p' || true)"
+        local url metadata
+        url="https://maven.grimoid.com/mods/com/grim3212/assorted/lib/assortedlib-common-$minecraft/maven-metadata.xml"
+        # curl's own error stays visible: what the maven answered is the whole diagnosis when this
+        # runs somewhere it is reachable from differently, like a CI runner.
+        if metadata="$(curl -fsS "$url")"; then
+            lib="$(sed -n 's/.*<latest>\(.*\)<\/latest>.*/\1/p' <<<"$metadata" | tr -d '\r')"
+        else
+            echo "fleet: could not read $url" >&2
+        fi
     fi
     [ -n "$lib" ] || die "cannot tell which AssortedLib to start on; pass --lib <version>"
 

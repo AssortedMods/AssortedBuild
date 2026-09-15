@@ -45,6 +45,23 @@ jobs:
       - name: Publish to the local maven
         run: ./gradlew publishToMavenLocal --stacktrace
 
+      # Everything below needs maven.grimoid.com from a runner: the scaffold reads the newest
+      # AssortedLib from it and the build then resolves that jar - as does every mod's own CI. It
+      # is behind Cloudflare, so a rule there that turns away datacenter clients shows up here as
+      # exactly that, with the status and headers, rather than as a build failure further down.
+      - name: maven.grimoid.com is reachable from a runner
+        run: |
+          mc="$(sed -n 's/^minecraft = "\(.*\)"/\1/p' gradle/libs.versions.toml)"
+          url="https://maven.grimoid.com/mods/com/grim3212/assorted/lib/assortedlib-common-$mc/maven-metadata.xml"
+          status="$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' "$url" || echo 'no response')"
+          echo "GET $url -> $status"
+          cat headers.txt
+          if [ "$status" != "200" ]; then
+            echo "::error::maven.grimoid.com answered $status to a runner; a Cloudflare rule is the usual reason"
+            head -c 2000 body.txt
+            exit 1
+          fi
+
       - name: Scaffold a mod
         run: fleet/fleet new "Assorted Example" example "A mod scaffolded to check the template." --into "$RUNNER_TEMP/AssortedExample"
 
