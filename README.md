@@ -100,7 +100,8 @@ this repository; `FLEET_ROOT` points elsewhere.
 
 `common/` holds the loader-agnostic code and both loader modules compile those sources inline. The
 NeoForge datagen writes models and language into `common/src/generated/client` and data into
-`common/src/generated/server`; Fabric's own datagen writes into `fabric/src/generated/resources`.
+`common/src/generated/server`, for both loaders: AssortedLib's `CrossLoaderData` adds Fabric's
+load conditions and ingredient types beside NeoForge's, and Fabric has no datagen of its own.
 Gametests live in a `gametest` source set in every module and never reach a jar.
 
 ## License

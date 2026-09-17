@@ -99,29 +99,13 @@ loom {
                 runDir 'build/clientGameTest'
             }
         }
-        datagenClient {
-            inherit client
-            name 'Fabric Datagen'
-            vmArg '-Dfabric-api.datagen'
-            vmArg "-Dfabric-api.datagen.output-dir=${file('src/generated/resources/')}"
-            vmArg "-Dfabric-api.datagen.modid=${mod_id}"
-            runDir 'build/datagen'
-        }
     }
 }
 
+// Fabric has no datagen: the NeoForge one writes common's tree for both loaders, with Fabric's load
+// conditions and ingredient types beside NeoForge's (AssortedLib's CrossLoaderData).
 sourceSets {
-    main.resources.srcDirs += ['src/generated/resources', '../common/src/generated/client', '../common/src/generated/server']
-}
-
-// Fabric consumes its own generated tree and the shared one NeoForge writes into common - the only
-// source of client models, so that root cannot be dropped. The two overlap on every recipe,
-// advancement, loot table and tag both datagens write, and recipes and advancements differ: each
-// carries its own loader's load conditions. Fabric's tree is listed first and duplicates are
-// excluded, so Fabric's copy wins. INCLUDE let the NeoForge copy overwrite it, and Fabric then
-// loaded every conditional recipe unconditionally.
-tasks.withType(AbstractCopyTask).configureEach {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    main.resources.srcDirs += ['../common/src/generated/client', '../common/src/generated/server']
 }
 
 processResources {

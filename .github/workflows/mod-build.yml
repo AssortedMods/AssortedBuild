@@ -135,12 +135,12 @@ jobs:
       # Catches generated output that was never regenerated and committed.
       - name: Datagen is committed
         run: |
-          ./gradlew :neoforge:runClientData :neoforge:runServerData :fabric:runDatagenClient --stacktrace
-          changed="$(git status --porcelain -- common/src/generated fabric/src/generated)"
+          ./gradlew :neoforge:runClientData :neoforge:runServerData --stacktrace
+          changed="$(git status --porcelain -- common/src/generated)"
           if [ -n "$changed" ]; then
             echo "::error::Datagen does not match what is committed"
             echo "$changed"
-            git diff --stat -- common/src/generated fabric/src/generated
+            git diff --stat -- common/src/generated
             exit 1
           fi
 

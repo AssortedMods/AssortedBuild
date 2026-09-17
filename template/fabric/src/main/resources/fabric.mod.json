@@ -19,9 +19,6 @@
     ],
     "client": [
       "com.grim3212.assorted.__MOD_PKG__.__MOD_REPO__FabricClient"
-    ],
-    "fabric-datagen": [
-      "com.grim3212.assorted.__MOD_PKG__.__MOD_REPO__FabricDatagen"
     ]
   },
   "depends": {
