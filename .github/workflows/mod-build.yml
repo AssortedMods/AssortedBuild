@@ -280,8 +280,11 @@ jobs:
               echo "Released \`$released\` on the \`$RELEASE_TYPE\` channel."
             fi
             echo
-            [ -n "$modrinth" ] && echo "- Modrinth <https://modrinth.com/mod/$modrinth>"
-            [ -n "$curseforge" ] && echo "- CurseForge <https://www.curseforge.com/projects/$curseforge>"
+            # `if` rather than `&&`: a blank id makes the last command of the block fail, and the
+            # step's exit status is that of the block, so the job went red on a mod with one
+            # destination.
+            if [ -n "$modrinth" ]; then echo "- Modrinth <https://modrinth.com/mod/$modrinth>"; fi
+            if [ -n "$curseforge" ]; then echo "- CurseForge <https://www.curseforge.com/projects/$curseforge>"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   # The maven publish, for anything another mod builds against - AssortedLib above all. Same gate
