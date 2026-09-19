@@ -152,7 +152,7 @@ publishing {
     }
 
     repositories {
-        // maven.grimoid.com is a static site served from the grim3212/maven repository, so
+        // maven.grimoid.com is a static site served from the AssortedMods/maven repository, so
         // publishing is a publish into a checkout of it followed by a push - the workflow's
         // publish job does both. ASSORTED_MAVEN is that checkout's mods/ directory. Declared only
         // when set, so `publish` anywhere else is a no-op rather than a failure. Gradle keeps the

@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Shared Renovate preset for every Assorted mod. A mod's renovate.json extends github>grim3212/AssortedBuild//renovate/default and nothing else.",
+  "description": "Shared Renovate preset for every Assorted mod. A mod's renovate.json extends github>AssortedMods/AssortedBuild//renovate/default and nothing else.",
   "extends": [
     "config:recommended",
     ":disableDependencyDashboard"

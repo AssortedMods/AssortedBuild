@@ -284,7 +284,7 @@ Scaffolded $name in $into
 
 Next:
   1. Replace common/src/main/resources/logo.png.
-  2. Create github.com/grim3212/$repo, then set modrinth_id and curseforge_id in gradle.properties
+  2. Create github.com/AssortedMods/$repo, then set modrinth_id and curseforge_id in gradle.properties
      once those projects exist (blank ids publish nowhere).
   3. Add it to fleet/mods.yaml.
   4. cd $into && ./gradlew build

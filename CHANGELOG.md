@@ -1,5 +1,17 @@
 # Changelog
 
+## 26.2.4
+
+- Everything moved to the AssortedMods GitHub organization. Workflows, Renovate presets, the
+  `fleet` repo list, the template and the maven publish now point at `AssortedMods/...` instead of
+  `grim3212/...`.
+
+## 26.2.3
+
+- Fabric has no datagen of its own any more. The `datagenClient` run is gone and the datagen check
+  in CI only runs the NeoForge datagen, which writes common's tree for both loaders.
+- The release summary no longer fails the job on a mod that only has one of Modrinth or CurseForge.
+
 ## 26.2.2
 
 - Publishing named its artifacts after the Gradle project - `common`, `fabric`, `neoforge` - rather

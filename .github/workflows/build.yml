@@ -52,7 +52,7 @@ jobs:
         working-directory: ${{ runner.temp }}/AssortedExample
         run: ./gradlew build --stacktrace
 
-  # maven.grimoid.com is a static site served by GitHub Pages from grim3212/maven, so publishing
+  # maven.grimoid.com is a static site served by GitHub Pages from AssortedMods/maven, so publishing
   # is: check that repository out, publish into its mods/ directory, push. MAVEN_DEPLOY_KEY is a
   # deploy key of that repository with write access.
   publish:
@@ -71,14 +71,14 @@ jobs:
           MAVEN_DEPLOY_KEY: ${{ secrets.MAVEN_DEPLOY_KEY }}
         run: |
           if [ -z "$MAVEN_DEPLOY_KEY" ]; then
-            echo "::error::MAVEN_DEPLOY_KEY is not set - nothing could be pushed to grim3212/maven"
+            echo "::error::MAVEN_DEPLOY_KEY is not set - nothing could be pushed to AssortedMods/maven"
             exit 1
           fi
 
       - name: Check out the maven
         uses: actions/checkout@v4
         with:
-          repository: grim3212/maven
+          repository: AssortedMods/maven
           ssh-key: ${{ secrets.MAVEN_DEPLOY_KEY }}
           path: maven
 

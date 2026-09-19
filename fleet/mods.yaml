@@ -7,49 +7,55 @@
 mods:
   - name: AssortedLib
     id: assortedlib
-    repo: grim3212/AssortedLib
+    repo: AssortedMods/AssortedLib
     modrinth: KkmxwW72
     curseforge: 851677
     slug: assorted-lib
   - name: AssortedCore
     id: assortedcore
-    repo: grim3212/AssortedCore
+    repo: AssortedMods/AssortedCore
     modrinth: Kqp5OpJt
     curseforge: 426885
     slug: assorted-core
   - name: AssortedCuisine
     id: assortedcuisine
-    repo: grim3212/AssortedCuisine
+    repo: AssortedMods/AssortedCuisine
     modrinth:
     curseforge:
     slug: assorted-cuisine
   - name: AssortedDecor
     id: assorteddecor
-    repo: grim3212/AssortedDecor
+    repo: AssortedMods/AssortedDecor
     modrinth: DyXZJYKu
     curseforge: 416069
     slug: assorted-decor
+  - name: AssortedMobs
+    id: assortedmobs
+    repo: AssortedMods/AssortedMobs
+    modrinth:
+    curseforge:
+    slug: assorted-mobs
   - name: AssortedStorage
     id: assortedstorage
-    repo: grim3212/AssortedStorage
+    repo: AssortedMods/AssortedStorage
     modrinth: RY5hZOKH
     curseforge: 408724
     slug: assorted-storage
   - name: AssortedTech
     id: assortedtech
-    repo: grim3212/AssortedTech
+    repo: AssortedMods/AssortedTech
     modrinth: rP02pNs4
     curseforge: 514337
     slug: assorted-tech
   - name: AssortedTools
     id: assortedtools
-    repo: grim3212/AssortedTools
+    repo: AssortedMods/AssortedTools
     modrinth: S9DUh1tA
     curseforge: 409802
     slug: assorted-tools
   - name: AssortedWorld
     id: assortedworld
-    repo: grim3212/AssortedWorld
+    repo: AssortedMods/AssortedWorld
     modrinth: ChPOe1eg
     curseforge: 487694
     slug: assorted-world

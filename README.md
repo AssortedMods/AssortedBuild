@@ -68,7 +68,7 @@ Local checkouts of AssortedBuild and AssortedLib are picked up from `mavenLocal(
 ## The maven
 
 `maven.grimoid.com` is a static site: GitHub Pages serving the
-[grim3212/maven](https://github.com/grim3212/maven) repository. Nothing runs there, nothing is
+[AssortedMods/maven](https://github.com/AssortedMods/maven) repository. Nothing runs there, nothing is
 hosted at home, and there is no server to keep bot protection on. A publish - here or in a mod's
 workflow - checks that repository out, runs `maven-publish` into its `mods/` directory with
 `ASSORTED_MAVEN` pointing there (Gradle keeps every `maven-metadata.xml` current in a file
