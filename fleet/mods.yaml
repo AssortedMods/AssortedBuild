@@ -20,8 +20,8 @@ mods:
   - name: AssortedCuisine
     id: assortedcuisine
     repo: AssortedMods/AssortedCuisine
-    modrinth:
-    curseforge:
+    modrinth: X3FSu1my
+    curseforge: 1700320
     slug: assorted-cuisine
   - name: AssortedDecor
     id: assorteddecor
@@ -32,8 +32,8 @@ mods:
   - name: AssortedMobs
     id: assortedmobs
     repo: AssortedMods/AssortedMobs
-    modrinth:
-    curseforge:
+    modrinth: qWKXgRnA
+    curseforge: 1709844
     slug: assorted-mobs
   - name: AssortedStorage
     id: assortedstorage
