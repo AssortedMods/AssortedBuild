@@ -68,6 +68,8 @@ loom {
             setConfigName('Fabric Client')
             ideConfigGenerated(true)
             runDir('run')
+            // Loom picks a random PlayerNNN otherwise, a new offline UUID each launch, so tamed mobs lose their owner.
+            programArgs '--username', 'Dev'
         }
         server {
             server()
