@@ -15,6 +15,25 @@ repositories {
         name = 'AssortedMods'
         url = 'https://maven.grimoid.com/mods'
     }
+    // Where a mod's optional integrations such as JEI come from, since this run pulls those in too.
+    maven {
+        name = 'BlameJared Maven (CrT / Bookshelf)'
+        url = 'https://maven.blamejared.com'
+        content {
+            excludeGroupByRegex 'net\\.minecraft.*'
+            excludeGroupByRegex 'net\\.fabricmc.*'
+            excludeGroupByRegex 'net\\.neoforged.*'
+        }
+    }
+    maven {
+        name = 'ModMaven'
+        url = 'https://modmaven.dev'
+        content {
+            excludeGroupByRegex 'net\\.minecraft.*'
+            excludeGroupByRegex 'net\\.fabricmc.*'
+            excludeGroupByRegex 'net\\.neoforged.*'
+        }
+    }
 }
 
 // Their source sets are read below, so each mod is configured first, common before the loader.
