@@ -1,0 +1,17 @@
+# Every Assorted repo, in dependency order: AssortedLib first, because everything else builds
+# against it. `fleet` reads this and nothing else should keep its own list - a new repo is added
+# here and every fleet command knows about it.
+#
+# Only the repos: the mods in each, and their ids, are read from its checkout. One `- owner/name`
+# per line, which fleet reads with sed.
+repos:
+  - AssortedMods/AssortedLib
+  - AssortedMods/AssortedCore
+  - AssortedMods/AssortedCuisine
+  - AssortedMods/AssortedDecor
+  - AssortedMods/AssortedMobs
+  - AssortedMods/AssortedStorage
+  - AssortedMods/AssortedTech
+  - AssortedMods/AssortedTools
+  - AssortedMods/AssortedWorld
+  - AssortedMods/AssortedUtil

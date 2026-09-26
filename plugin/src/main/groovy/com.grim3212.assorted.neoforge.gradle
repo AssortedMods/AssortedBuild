@@ -21,7 +21,7 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet sourceSets.main
-            sourceSet project(':common').sourceSets.main
+            sourceSet Assorted.module(project, 'common').sourceSets.main
             // Development only. This source set is not an input to `jar`, so nothing here ships;
             // it is listed so a dev run can see the test classes and the test_instance jsons.
             sourceSet sourceSets.gametest
@@ -96,7 +96,12 @@ sourceSets.main.resources {
 }
 
 dependencies {
-    compileOnly project(':common')
+    compileOnly Assorted.module(project, 'common')
+
+    // A bundle mod ships its family's mods nested in its own jar (Jar-in-Jar).
+    Assorted.modDirs(project.findProperty('bundled_mods') as String).each {
+        jarJar project(":$it:neoforge")
+    }
 
     if (Assorted.flag(project, 'jei_enabled')) {
         implementation "mezz.jei:jei-${jei_minecraft_version}-neoforge:${jei_version}"
@@ -110,15 +115,15 @@ dependencies {
 // Only the main compile takes common's sources. configureEach fed them to compileTestJava too,
 // which has no Minecraft on its classpath, and that is what made `./gradlew build` fail.
 tasks.named('compileJava') {
-    source(project(':common').sourceSets.main.allSource)
+    source(Assorted.module(project, 'common').sourceSets.main.java)
 }
 
 tasks.named('compileGametestJava') {
-    source(project(':common').sourceSets.gametest.allSource)
+    source(Assorted.module(project, 'common').sourceSets.gametest.java)
 }
 
 tasks.named('processGametestResources') {
-    from project(':common').sourceSets.gametest.resources
+    from Assorted.module(project, 'common').sourceSets.gametest.resources
 }
 
 // neoforge.mods.toml is templated out of src/main/templates, matching the modern MDK layout.
@@ -146,7 +151,7 @@ sourceSets.main.resources.srcDir tasks.named('generateModMetadata')
 neoForge.ideSyncTask tasks.named('generateModMetadata')
 
 processResources {
-    from project(':common').sourceSets.main.resources
+    from Assorted.module(project, 'common').sourceSets.main.resources
     duplicatesStrategy(DuplicatesStrategy.FAIL)
     exclude '.cache'
     exclude "${mod_id}_common.accesswidener"

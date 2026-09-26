@@ -2,50 +2,42 @@
 
 __MOD_DESCRIPTION__
 
-Minecraft __MC__, on both NeoForge and Fabric from a single source tree. Requires
-[Assorted Lib](https://github.com/AssortedMods/AssortedLib). Branches are per Minecraft version; `__MC__`
-is the current one.
+For Minecraft __MC__ on NeoForge and Fabric. Requires [Assorted Lib](https://github.com/AssortedMods/AssortedLib).
+Branches are per Minecraft version and `__MC__` is the current one.
 
 ## Issue Reporting
 
 Please include the following
 
 * Minecraft version
-* Loader and its version — NeoForge, or Fabric Loader together with Fabric API
+* NeoForge version, or Fabric Loader and Fabric API versions
 * __MOD_NAME__ version
 * Assorted Lib version
-* The full `latest.log`, plus the crash report if the game crashed
+* The full `latest.log`, and the crash report if the game crashed
 
 ## Building
 
-JDK 25 and the bundled Gradle wrapper. `common/` holds the loader-agnostic code; both loader
-modules compile those sources inline rather than depending on a common jar, so there is nothing to
-install between them.
+You need JDK 25. The shared code is in `common` and both loaders build it in. The build setup comes
+from [AssortedBuild](https://github.com/AssortedMods/AssortedBuild) and `assortedbuild_version` in
+`gradle.properties` picks the version.
 
-How the build works - the Minecraft and loader versions, the runs, the tests, publishing - lives in
-[AssortedBuild](https://github.com/AssortedMods/AssortedBuild), pinned by `assortedbuild_version` in
-`gradle.properties`. This repository only says what the mod is.
-
-Assorted Lib is consumed as a Maven artifact. To build against an unreleased one, publish it first:
+To build against a local copy of Assorted Lib, publish it first.
 
 ```bash
 cd ../AssortedLib && ./gradlew publishToMavenLocal
 ```
 
-Then from this repository:
+Some useful commands
 
 ```bash
-./gradlew build                        # every module; jars land in <module>/build/libs
-./gradlew :neoforge:runClient
-./gradlew :fabric:runClient
-./gradlew :neoforge:runGameTestServer  # headless gametests, non-zero exit on failure
-./gradlew :fabric:runGameTest
+./gradlew build                        # build the mod
+./gradlew :neoforge:runClient          # run it on NeoForge
+./gradlew :fabric:runClient            # run it on Fabric
+./gradlew :neoforge:runGameTestServer  # gametests on NeoForge
+./gradlew :fabric:runGameTest          # gametests on Fabric
 ./gradlew :neoforge:runClientData      # datagen
 ./gradlew :neoforge:runServerData
 ```
-
-Generated resources are committed. The NeoForge datagen writes them for both loaders; they are
-regenerated, never hand-edited.
 
 ## License
 

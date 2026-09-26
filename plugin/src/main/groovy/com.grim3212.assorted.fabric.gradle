@@ -29,7 +29,12 @@ dependencies {
         implementation "com.grim3212.assorted.lib:assortedlib-fabric-${minecraft_version}:${assortedlib_version}"
     }
 
-    implementation project(':common')
+    implementation Assorted.module(project, 'common')
+
+    // A bundle mod ships its family's mods nested in its own jar, as Fabric API does its modules.
+    Assorted.modDirs(project.findProperty('bundled_mods') as String).each {
+        include project(":$it:fabric")
+    }
 
     // Mod jars the production client gametest run loads beside our own jar. A dev run takes these
     // off the classpath; a production run is a real client, so each one has to be a real mod jar.
@@ -111,7 +116,7 @@ sourceSets {
 }
 
 processResources {
-    from project(':common').sourceSets.main.resources
+    from Assorted.module(project, 'common').sourceSets.main.resources
     inputs.property 'version', project.version
 
     filesMatching('fabric.mod.json') {
@@ -132,15 +137,15 @@ processResources {
 // Only the main compile takes common's sources. configureEach fed them to compileTestJava too,
 // which has no Minecraft on its classpath, and that is what made `./gradlew build` fail.
 tasks.named('compileJava') {
-    source(project(':common').sourceSets.main.allSource)
+    source(Assorted.module(project, 'common').sourceSets.main.java)
 }
 
 tasks.named('compileGametestJava') {
-    source(project(':common').sourceSets.gametest.allSource)
+    source(Assorted.module(project, 'common').sourceSets.gametest.java)
 }
 
 tasks.named('processGametestResources') {
-    from project(':common').sourceSets.gametest.resources
+    from Assorted.module(project, 'common').sourceSets.gametest.resources
 
     filesMatching('fabric.mod.json') {
         expand 'version': project.version, 'mod_id': project.mod_id, 'mod_name': project.mod_name,

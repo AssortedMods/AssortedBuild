@@ -7,7 +7,10 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention'
 }
 
-rootProject.name = providers.gradleProperty('mod_name').get()
+def modDirs = Assorted.modDirs(providers.gradleProperty('assorted_mods').getOrNull())
+
+// A family repo is named for the family; a repo that is one mod, for the mod.
+rootProject.name = providers.gradleProperty('family_name').orElse(providers.gradleProperty('mod_name')).get()
 
 dependencyResolutionManagement {
     // Only the catalog resolves here; each module declares its own repositories, which Gradle
@@ -28,8 +31,68 @@ dependencyResolutionManagement {
 
 // The loader modules cannot resolve their AssortedLib artifact until it is published, so
 // `-PcommonOnly` builds just the common module without anyone having to edit a file.
-if (startParameter.projectProperties.containsKey('commonOnly')) {
-    include 'common'
+def modules = startParameter.projectProperties.containsKey('commonOnly') ? ['common'] : ['common', 'fabric', 'neoforge']
+
+if (modDirs.isEmpty()) {
+    include(*modules)
 } else {
-    include 'common', 'fabric', 'neoforge'
+    // The root file reaches every mod, so what belongs to one of them must not be in it.
+    def perMod = ['mod_id', 'mod_name', 'version', 'group', 'modrinth_id', 'curseforge_id']
+    def leaked = perMod.findAll { providers.gradleProperty(it).isPresent() && !startParameter.projectProperties.containsKey(it) }
+    if (leaked) {
+        throw new GradleException("gradle.properties sets ${leaked.join(', ')}, which belong in each mod's own gradle.properties")
+    }
+
+    // Every mod sits in mods/<dir>, but its projects keep the short path :<dir>.
+    Map<String, Properties> modProperties = [:]
+    modDirs.each { dir ->
+        File modDir = new File(settingsDir, "mods/$dir")
+        File file = new File(modDir, 'gradle.properties')
+        if (!file.exists()) {
+            throw new GradleException("assorted_mods names $dir, which has no mods/$dir/gradle.properties")
+        }
+        Properties properties = new Properties()
+        file.withReader('UTF-8') { properties.load(it) }
+        modProperties[dir] = properties
+
+        include(*modules.collect { "$dir:$it" })
+        project(":$dir").projectDir = modDir
+        modules.each { project(":$dir:$it").projectDir = new File(modDir, it) }
+    }
+
+    // Dev-only games with every mod loaded; generated under build/, nothing to commit.
+    if (!startParameter.projectProperties.containsKey('commonOnly')) {
+        ['fabric', 'neoforge'].each { loader ->
+            File dir = new File(settingsDir, "build/all/$loader")
+            dir.mkdirs()
+            new File(dir, 'build.gradle').text = "plugins {\n    id 'com.grim3212.assorted.all-$loader'\n}\n"
+            include "all:$loader"
+            project(":all:$loader").projectDir = dir
+        }
+        project(':all').projectDir = new File(settingsDir, 'build/all')
+    }
+
+    // Gradle isolates the action below, so it can only hold plain values, not this script's objects.
+    Set<String> commandLine = new HashSet<>(startParameter.projectProperties.keySet())
+    // Gradle only reads the root's gradle.properties, so each mod's own is set on its projects here.
+    gradle.lifecycle.beforeProject { project ->
+        String dir = project.path.split(':').find { it }
+        Properties properties = modProperties[dir]
+        if (properties == null) {
+            return
+        }
+        properties.each { String key, String value ->
+            // -P on the command line still wins, as it does over the root file.
+            if (commandLine.contains(key)) {
+                return
+            }
+            if (key == 'version') {
+                project.version = value
+            } else if (key == 'group') {
+                project.group = value
+            } else {
+                project.extensions.extraProperties.set(key, value)
+            }
+        }
+    }
 }

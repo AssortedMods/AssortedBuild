@@ -1,0 +1,60 @@
+import com.grim3212.assorted.build.Assorted
+
+// A family repo's mods in one NeoForge game, for trying them together: `./gradlew :all:neoforge:runClient`.
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev'
+}
+
+def familyDirs = Assorted.modDirs(findProperty('assorted_mods') as String)
+def minecraftVersion = Assorted.catalogVersion(project, 'minecraft')
+
+repositories {
+    mavenLocal()
+    maven {
+        name = 'AssortedMods'
+        url = 'https://maven.grimoid.com/mods'
+    }
+}
+
+// Their source sets are read below, so each mod is configured first, common before the loader.
+familyDirs.each {
+    evaluationDependsOn(":$it:common")
+    evaluationDependsOn(":$it:neoforge")
+}
+
+// A bundle has no code of its own; the mods it nests are here already.
+def modDirs = familyDirs.findAll { !project(":$it:neoforge").findProperty('bundled_mods') }
+
+neoForge {
+    version = Assorted.catalogVersion(project, 'neoforge')
+
+    mods {
+        modDirs.each { dir ->
+            Project mod = project(":$dir:neoforge")
+            "${mod.mod_id}" {
+                sourceSet mod.sourceSets.main
+                sourceSet project(":$dir:common").sourceSets.main
+            }
+        }
+    }
+
+    runs {
+        client {
+            client()
+            gameDirectory = rootProject.file('run/all-neoforge')
+        }
+        server {
+            server()
+            gameDirectory = rootProject.file('run/all-neoforge')
+            programArgument '--nogui'
+        }
+    }
+}
+
+dependencies {
+    implementation "com.grim3212.assorted.lib:assortedlib-neoforge-$minecraftVersion:$assortedlib_version"
+}
+
+// Nothing of its own to ship.
+tasks.named('jar') { enabled = false }

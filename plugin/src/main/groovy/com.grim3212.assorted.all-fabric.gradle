@@ -1,0 +1,65 @@
+import com.grim3212.assorted.build.Assorted
+
+// A family repo's mods in one Fabric game, for trying them together: `./gradlew :all:fabric:runClient`.
+plugins {
+    id 'java'
+    id 'net.fabricmc.fabric-loom'
+}
+
+def familyDirs = Assorted.modDirs(findProperty('assorted_mods') as String)
+def minecraftVersion = Assorted.catalogVersion(project, 'minecraft')
+
+repositories {
+    mavenLocal()
+    maven {
+        name = 'AssortedMods'
+        url = 'https://maven.grimoid.com/mods'
+    }
+}
+
+// Their source sets are read below, so each mod is configured first, common before the loader.
+familyDirs.each {
+    evaluationDependsOn(":$it:common")
+    evaluationDependsOn(":$it:fabric")
+}
+
+// A bundle has no code of its own; the mods it nests are here already.
+def modDirs = familyDirs.findAll { !project(":$it:fabric").findProperty('bundled_mods') }
+
+dependencies {
+    minecraft "com.mojang:minecraft:$minecraftVersion"
+    implementation "net.fabricmc:fabric-loader:${Assorted.catalogVersion(project, 'fabric-loader')}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${Assorted.catalogVersion(project, 'fabric-api')}"
+    implementation "com.grim3212.assorted.lib:assortedlib-fabric-$minecraftVersion:$assortedlib_version"
+    modDirs.each { implementation project(":$it:fabric") }
+}
+
+loom {
+    mods {
+        modDirs.each { dir ->
+            Project mod = project(":$dir:fabric")
+            "${mod.mod_id}" {
+                sourceSet('main', mod)
+            }
+        }
+    }
+
+    runs {
+        client {
+            client()
+            setConfigName('Fabric Client (all mods)')
+            ideConfigGenerated(true)
+            runDir('../../../run/all-fabric')
+            programArgs '--username', 'Dev'
+        }
+        server {
+            server()
+            setConfigName('Fabric Server (all mods)')
+            ideConfigGenerated(true)
+            runDir('../../../run/all-fabric')
+        }
+    }
+}
+
+// Nothing of its own to ship.
+tasks.named('jar') { enabled = false }

@@ -36,6 +36,10 @@ on:
         description: Also run the Fabric client gametests (a real client, under xvfb)
         type: boolean
         default: false
+      mods:
+        description: In a family repo, the mods to release or publish, comma separated (blank is all)
+        type: string
+        default: ''
 
 # Every job sets Minecraft up from scratch, so a newer run on the same ref makes the running one a
 # waste of a runner. Keyed on the event too, so a push never cancels a manual run once triggers
@@ -59,4 +63,5 @@ jobs:
       dry_run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
       version: ${{ inputs.version }}
       client_gametests: ${{ github.event_name == 'workflow_dispatch' && inputs.client_gametests }}
+      mods: ${{ inputs.mods }}
     secrets: inherit

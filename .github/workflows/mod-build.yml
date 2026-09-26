@@ -34,6 +34,10 @@ on:
         description: Also run the Fabric client gametests (a real client, under xvfb)
         type: boolean
         default: false
+      mods:
+        description: In a family repo, the mod directories to release or publish, comma separated (blank is all)
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -62,7 +66,7 @@ jobs:
       - name: No test classes ship in the jars
         run: |
           status=0
-          for jar in */build/libs/*.jar; do
+          for jar in $(find . -path '*/build/libs/*.jar'); do
             hits=$(unzip -l "$jar" | grep -icE 'gametest|test_instance|test_box' || true)
             if [ "$hits" != "0" ]; then
               echo "::error::$jar ships $hits gametest entries"
@@ -76,9 +80,9 @@ jobs:
         with:
           name: jars
           path: |
-            common/build/libs/*.jar
-            fabric/build/libs/*.jar
-            neoforge/build/libs/*.jar
+            **/common/build/libs/*.jar
+            **/fabric/build/libs/*.jar
+            **/neoforge/build/libs/*.jar
             !**/*-sources.jar
 
   gametest:
@@ -91,10 +95,10 @@ jobs:
       matrix:
         include:
           - loader: neoforge
-            task: ':neoforge:runGameTestServer'
+            task: runGameTestServer
             run_dir: neoforge/run
           - loader: fabric
-            task: ':fabric:runGameTest'
+            task: runGameTest
             run_dir: fabric/build/gametest
     steps:
       - uses: actions/checkout@v4
@@ -116,9 +120,9 @@ jobs:
           name: gametest-${{ matrix.loader }}
           if-no-files-found: ignore
           path: |
-            ${{ matrix.run_dir }}/logs/
-            ${{ matrix.run_dir }}/crash-reports/
-            ${{ matrix.run_dir }}/report.xml
+            **/${{ matrix.run_dir }}/logs/
+            **/${{ matrix.run_dir }}/crash-reports/
+            **/${{ matrix.run_dir }}/report.xml
 
   datagen:
     name: Datagen
@@ -135,12 +139,13 @@ jobs:
       # Catches generated output that was never regenerated and committed.
       - name: Datagen is committed
         run: |
-          ./gradlew :neoforge:runClientData :neoforge:runServerData --stacktrace
-          changed="$(git status --porcelain -- common/src/generated)"
+          ./gradlew runClientData runServerData --stacktrace
+          generated=':(glob)**/common/src/generated/**'
+          changed="$(git status --porcelain -- "$generated")"
           if [ -n "$changed" ]; then
             echo "::error::Datagen does not match what is committed"
             echo "$changed"
-            git diff --stat -- common/src/generated
+            git diff --stat -- "$generated"
             exit 1
           fi
 
@@ -172,7 +177,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends xvfb libgl1
 
       - name: Run the client gametests
-        run: ./gradlew :fabric:runProductionClientGameTest --stacktrace
+        run: ./gradlew runProductionClientGameTest --stacktrace
 
       # Screenshots whatever the outcome: Fabric's client gametests take them as they go, and they
       # are the only record of what the client actually drew.
@@ -183,9 +188,9 @@ jobs:
           name: client-gametest
           if-no-files-found: ignore
           path: |
-            fabric/build/run/clientGameTest/screenshots/
-            fabric/build/run/clientGameTest/logs/
-            fabric/build/run/clientGameTest/crash-reports/
+            **/fabric/build/run/clientGameTest/screenshots/
+            **/fabric/build/run/clientGameTest/logs/
+            **/fabric/build/run/clientGameTest/crash-reports/
 
   # Only with the box ticked - a push must never publish. `needs` covers every other job, and a
   # matrix `needs` waits for all of its legs, so one failed gametest on either loader skips this.
@@ -208,6 +213,32 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
 
+      # A family repo lists its mods in assorted_mods; one without it is a single mod at the root.
+      - name: Which mods
+        id: mods
+        env:
+          MODS: ${{ inputs.mods }}
+        run: |
+          all="$(sed -n 's/^assorted_mods=//p' gradle.properties | tr ',' ' ')"
+          if [ -z "$all" ]; then
+            if [ -n "$MODS" ]; then
+              echo "::error::mods is set, but this repository is one mod"
+              exit 1
+            fi
+            dirs="."
+          elif [ -n "$MODS" ]; then
+            dirs="$(echo "$MODS" | tr ',' ' ')"
+            for dir in $dirs; do
+              case " $all " in
+                *" $dir "*) ;;
+                *) echo "::error::$dir is not in assorted_mods ($all)"; exit 1 ;;
+              esac
+            done
+          else
+            dirs="$all"
+          fi
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+
       # Both failures here are silent ones. A destination whose id is blank is left out of the
       # build script entirely, and a missing token turns the whole run into a dry run - either way
       # the job goes green having uploaded nothing. Skipped for a dry run, which is allowed to have
@@ -217,25 +248,31 @@ jobs:
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          DIRS: ${{ steps.mods.outputs.dirs }}
         run: |
-          modrinth="$(sed -n 's/^modrinth_id=//p' gradle.properties)"
-          curseforge="$(sed -n 's/^curseforge_id=//p' gradle.properties)"
-          if [ -z "$modrinth" ] && [ -z "$curseforge" ]; then
-            echo "::error::neither modrinth_id nor curseforge_id is set in gradle.properties"
-            exit 1
-          fi
-
           status=0
-          if [ -n "$modrinth" ] && [ -z "$MODRINTH_TOKEN" ]; then
-            echo "::error::modrinth_id is set but MODRINTH_TOKEN is not"
-            status=1
-          fi
-          if [ -n "$curseforge" ] && [ -z "$CURSEFORGE_TOKEN" ]; then
-            echo "::error::curseforge_id is set but CURSEFORGE_TOKEN is not"
-            status=1
-          fi
-          [ -n "$modrinth" ] || echo "::warning::modrinth_id is blank, so Modrinth is skipped"
-          [ -n "$curseforge" ] || echo "::warning::curseforge_id is blank, so CurseForge is skipped"
+          for dir in $DIRS; do
+            properties="mods/$dir/gradle.properties"
+            [ "$dir" != "." ] || properties="gradle.properties"
+            modrinth="$(sed -n 's/^modrinth_id=//p' "$properties")"
+            curseforge="$(sed -n 's/^curseforge_id=//p' "$properties")"
+            if [ -z "$modrinth" ] && [ -z "$curseforge" ]; then
+              echo "::error::neither modrinth_id nor curseforge_id is set in $properties"
+              status=1
+              continue
+            fi
+
+            if [ -n "$modrinth" ] && [ -z "$MODRINTH_TOKEN" ]; then
+              echo "::error::modrinth_id is set in $properties but MODRINTH_TOKEN is not"
+              status=1
+            fi
+            if [ -n "$curseforge" ] && [ -z "$CURSEFORGE_TOKEN" ]; then
+              echo "::error::curseforge_id is set in $properties but CURSEFORGE_TOKEN is not"
+              status=1
+            fi
+            [ -n "$modrinth" ] || echo "::warning::modrinth_id is blank in $properties, so Modrinth is skipped"
+            [ -n "$curseforge" ] || echo "::warning::curseforge_id is blank in $properties, so CurseForge is skipped"
+          done
           exit $status
 
       # Everything the run is steered by reaches gradle through the environment rather than
@@ -247,12 +284,17 @@ jobs:
           VERSION: ${{ inputs.version }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           DRY_RUN: ${{ inputs.dry_run }}
+          DIRS: ${{ steps.mods.outputs.dirs }}
         run: |
           args=( "-PreleaseType=$RELEASE_TYPE" "-PdryRun=$DRY_RUN" )
           if [ -n "$VERSION" ]; then
             args+=( "-Pversion=$VERSION" )
           fi
-          ./gradlew publishMods "${args[@]}" --stacktrace
+          tasks=()
+          for dir in $DIRS; do
+            if [ "$dir" = "." ]; then tasks+=( publishMods ); else tasks+=( ":$dir:publishMods" ); fi
+          done
+          ./gradlew "${tasks[@]}" "${args[@]}" --stacktrace
 
       # A dry run writes exactly what it would have uploaded here, which is the only way to check a
       # release before making it. Kept for a real run too, as the record of what went out.
@@ -262,29 +304,38 @@ jobs:
         with:
           name: release
           if-no-files-found: ignore
-          path: build/publishMods/
+          path: |
+            build/publishMods/
+            mods/*/build/publishMods/
 
       - name: Summary
         env:
           VERSION: ${{ inputs.version }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           DRY_RUN: ${{ inputs.dry_run }}
+          DIRS: ${{ steps.mods.outputs.dirs }}
         run: |
-          released="${VERSION:-$(sed -n 's/^version=//p' gradle.properties)}"
-          modrinth="$(sed -n 's/^modrinth_id=//p' gradle.properties)"
-          curseforge="$(sed -n 's/^curseforge_id=//p' gradle.properties)"
           {
             if [ "$DRY_RUN" = "true" ]; then
               echo "**Dry run** - nothing was uploaded. The payload is in the \`release\` artifact."
-            else
-              echo "Released \`$released\` on the \`$RELEASE_TYPE\` channel."
+              echo
             fi
-            echo
-            # `if` rather than `&&`: a blank id makes the last command of the block fail, and the
-            # step's exit status is that of the block, so the job went red on a mod with one
-            # destination.
-            if [ -n "$modrinth" ]; then echo "- Modrinth <https://modrinth.com/mod/$modrinth>"; fi
-            if [ -n "$curseforge" ]; then echo "- CurseForge <https://www.curseforge.com/projects/$curseforge>"; fi
+            for dir in $DIRS; do
+              properties="mods/$dir/gradle.properties"
+              [ "$dir" != "." ] || properties="gradle.properties"
+              released="${VERSION:-$(sed -n 's/^version=//p' "$properties")}"
+              name="$(sed -n 's/^mod_name=//p' "$properties")"
+              modrinth="$(sed -n 's/^modrinth_id=//p' "$properties")"
+              curseforge="$(sed -n 's/^curseforge_id=//p' "$properties")"
+              echo "**$name** \`$released\` on the \`$RELEASE_TYPE\` channel."
+              echo
+              # `if` rather than `&&`: a blank id makes the last command of the block fail, and the
+              # step's exit status is that of the block, so the job went red on a mod with one
+              # destination.
+              if [ -n "$modrinth" ]; then echo "- Modrinth <https://modrinth.com/mod/$modrinth>"; fi
+              if [ -n "$curseforge" ]; then echo "- CurseForge <https://www.curseforge.com/projects/$curseforge>"; fi
+              echo
+            done
           } >> "$GITHUB_STEP_SUMMARY"
 
   # The maven publish, for anything another mod builds against - AssortedLib above all. Same gate
@@ -308,6 +359,32 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
 
+      # A family repo lists its mods in assorted_mods; one without it is a single mod at the root.
+      - name: Which mods
+        id: mods
+        env:
+          MODS: ${{ inputs.mods }}
+        run: |
+          all="$(sed -n 's/^assorted_mods=//p' gradle.properties | tr ',' ' ')"
+          if [ -z "$all" ]; then
+            if [ -n "$MODS" ]; then
+              echo "::error::mods is set, but this repository is one mod"
+              exit 1
+            fi
+            dirs="."
+          elif [ -n "$MODS" ]; then
+            dirs="$(echo "$MODS" | tr ',' ' ')"
+            for dir in $dirs; do
+              case " $all " in
+                *" $dir "*) ;;
+                *) echo "::error::$dir is not in assorted_mods ($all)"; exit 1 ;;
+              esac
+            done
+          else
+            dirs="$all"
+          fi
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+
       - name: The deploy key is set
         env:
           MAVEN_DEPLOY_KEY: ${{ secrets.MAVEN_DEPLOY_KEY }}
@@ -328,11 +405,21 @@ jobs:
         env:
           ASSORTED_MAVEN: ${{ github.workspace }}/maven/mods
           VERSION: ${{ inputs.version }}
+          DIRS: ${{ steps.mods.outputs.dirs }}
         run: |
+          task=publishAllPublicationsToAssortedModsRepository
+          tasks=()
+          for dir in $DIRS; do
+            if [ "$dir" = "." ]; then
+              tasks+=( "$task" )
+            else
+              tasks+=( ":$dir:common:$task" ":$dir:fabric:$task" ":$dir:neoforge:$task" )
+            fi
+          done
           if [ -n "$VERSION" ]; then
-            ./gradlew publishAllPublicationsToAssortedModsRepository "-Pversion=$VERSION" --stacktrace
+            ./gradlew "${tasks[@]}" "-Pversion=$VERSION" --stacktrace
           else
-            ./gradlew publishAllPublicationsToAssortedModsRepository --stacktrace
+            ./gradlew "${tasks[@]}" --stacktrace
           fi
 
       # Rebases before pushing so two releases landing at once do not reject each other; their
@@ -341,13 +428,20 @@ jobs:
         working-directory: maven
         env:
           VERSION: ${{ inputs.version }}
+          DIRS: ${{ steps.mods.outputs.dirs }}
         run: |
-          published="${VERSION:-$(sed -n 's/^version=//p' ../gradle.properties)}"
-          mod_name="$(sed -n 's/^mod_name=//p' ../gradle.properties)"
+          published=""
+          for dir in $DIRS; do
+            properties="../mods/$dir/gradle.properties"
+            [ "$dir" != "." ] || properties="../gradle.properties"
+            name="$(sed -n 's/^mod_name=//p' "$properties")"
+            version="${VERSION:-$(sed -n 's/^version=//p' "$properties")}"
+            published="${published:+$published, }$name $version"
+          done
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m "$mod_name $published"
+          git commit -m "$published"
           for attempt in 1 2 3; do
             git pull --rebase && git push && exit 0
             sleep 5
@@ -357,14 +451,20 @@ jobs:
       - name: Summary
         env:
           VERSION: ${{ inputs.version }}
+          DIRS: ${{ steps.mods.outputs.dirs }}
         run: |
-          published="${VERSION:-$(sed -n 's/^version=//p' gradle.properties)}"
-          group="$(sed -n 's/^group=//p' gradle.properties)"
-          mod_id="$(sed -n 's/^mod_id=//p' gradle.properties)"
           {
-            echo "Published \`$published\` to <https://maven.grimoid.com/mods/${group//.//}/>. Pages serves it within about ten minutes."
-            echo
-            for loader in common fabric neoforge; do
-              echo "- \`$group:$mod_id-$loader-<minecraft>:$published\`"
+            for dir in $DIRS; do
+              properties="mods/$dir/gradle.properties"
+              [ "$dir" != "." ] || properties="gradle.properties"
+              published="${VERSION:-$(sed -n 's/^version=//p' "$properties")}"
+              group="$(sed -n 's/^group=//p' "$properties")"
+              mod_id="$(sed -n 's/^mod_id=//p' "$properties")"
+              echo "Published \`$published\` to <https://maven.grimoid.com/mods/${group//.//}/>. Pages serves it within about ten minutes."
+              echo
+              for loader in common fabric neoforge; do
+                echo "- \`$group:$mod_id-$loader-<minecraft>:$published\`"
+              done
+              echo
             done
           } >> "$GITHUB_STEP_SUMMARY"

@@ -1,25 +1,22 @@
 # Assorted Build
 
-How every Assorted mod is built, in one place. A mod repository says what the mod is - its id,
-name, version, the AssortedLib it needs, a few on/off knobs - and this repository says everything
-else: the Minecraft, NeoForge, Fabric and tooling versions, the module layout, the runs, the tests,
-how a release goes out. Change it here, bump one number in a mod, and the mod has it.
+The shared build for every Assorted mod. Each mod only sets things like its id, name, version and which
+Assorted Lib it needs. Everything else lives here, like the Minecraft and loader versions, the runs, the
+tests and how releases go out. Change something here, bump one number in a mod, and the mod picks it up.
 
-What is in here:
-
-| Path | What |
+| Path | What it is |
 | --- | --- |
-| `gradle/libs.versions.toml` | Every shared version. The one file to edit for a Minecraft, loader or tooling bump. |
-| `plugin/` | The Gradle convention plugins (`com.grim3212.assorted`, `.root`, `.common`, `.fabric`, `.neoforge`). |
-| `catalog/` | Publishes the TOML above as a version catalog the settings plugin imports. |
-| `.github/workflows/mod-build.yml` | The reusable build/test/release pipeline every mod's workflow calls. |
-| `fleet/` | `fleet`, the command for doing something to all the mods at once, and `mods.yaml`, the list of them. |
-| `template/` | What `fleet new` stamps a new mod out of. |
-| `renovate/` | Shared Renovate presets. |
+| `gradle/libs.versions.toml` | Every shared version. Edit this for a Minecraft, loader or tooling update. |
+| `plugin/` | The Gradle plugins every mod applies. |
+| `catalog/` | Publishes the versions file so mods can use it. |
+| `.github/workflows/mod-build.yml` | The build, test and release workflow every mod calls. |
+| `fleet/` | The `fleet` command for doing something to every mod at once, and `repos.yaml` with the list of repos. |
+| `template/` | What `fleet new` copies to make a new mod. |
+| `renovate/` | Shared Renovate settings. |
 
 ## Using it from a mod
 
-`settings.gradle` applies one plugin and each module's `build.gradle` applies its convention:
+`settings.gradle` applies one plugin and each module's `build.gradle` applies its own.
 
 ```groovy
 // settings.gradle
@@ -32,77 +29,91 @@ plugins {
 // neoforge/build.gradle     -> id 'com.grim3212.assorted.neoforge'
 ```
 
-`gradle.properties` is the whole per-mod surface:
+Everything a mod sets goes in its `gradle.properties`.
 
-| Property | Meaning |
+| Property | What it does |
 | --- | --- |
-| `assortedbuild_version` | Which release of this repository to build with. The first two segments are the Minecraft version it targets. |
-| `version`, `group`, `license`, `issue_tracker` | The mod's own. |
-| `mod_id`, `mod_name`, `mod_author`, `mod_description` | Expanded into `fabric.mod.json`, `neoforge.mods.toml`, `pack.mcmeta` and the jar manifest. |
-| `assortedlib_version` | The AssortedLib the mod **needs** - its minimum, declared as such on both loaders. Absent only in AssortedLib itself. |
-| `jei_enabled` | Compile against the JEI API and put JEI on the dev runtime. |
-| `client_gametests_enabled` | Add the Fabric client gametest run and its production-run task. Off unless the mod has client tests. |
-| `neoforge_ats_enabled` | Apply `neoforge/src/main/resources/META-INF/accesstransformer.cfg`. |
-| `common_runs_enabled` | Add client/server runs to the common module (rarely useful). |
-| `modrinth_id`, `curseforge_id`, `curseforge_slug`, `release_type` | Where and how a release goes. A blank id publishes to nowhere. |
+| `assortedbuild_version` | Which version of this repo to build with. The first two numbers are the Minecraft version. |
+| `version`, `group`, `license`, `issue_tracker` | The mod's own details. |
+| `mod_id`, `mod_name`, `mod_author`, `mod_description` | Filled into `fabric.mod.json`, `neoforge.mods.toml` and `pack.mcmeta`. |
+| `assortedlib_version` | The lowest Assorted Lib version the mod works with. |
+| `jei_enabled` | Builds against JEI and adds it to the dev runs. |
+| `client_gametests_enabled` | Adds the Fabric client gametests. Leave it off unless the mod has some. |
+| `neoforge_ats_enabled` | Uses the mod's NeoForge access transformer. |
+| `common_runs_enabled` | Adds client and server runs to the common module. Rarely needed. |
+| `modrinth_id`, `curseforge_id`, `curseforge_slug`, `release_type` | Where a release gets uploaded. A blank id skips that site. |
 
-A mod that needs something more writes plain Gradle in its module's `build.gradle` on top of the
-convention - AssortedStorage's optional Curios dependency, for example. The plugin does not grow a
-knob for one mod.
+If a mod needs something extra it can add normal Gradle code to its own `build.gradle`. AssortedStorage
+does this for Curios.
 
-Versions come from the catalog and are also exposed as the project properties they always were
-(`minecraft_version`, `neoforge_version`, `fabric_version`, `jei_version`, ...), so a mod's own
-script and its metadata templates keep working unchanged.
+### Several mods in one repo
 
-Local checkouts of AssortedBuild and AssortedLib are picked up from `mavenLocal()` after
-`./gradlew publishToMavenLocal` in either one - the same step as before for an unreleased library.
+A repo can hold a group of mods, like AssortedUtil does. Each mod is a folder under `mods` and the root
+`gradle.properties` lists them.
 
-## Releasing this repository
+```properties
+family_name=Assorted Util
+assorted_mods=graves,doubledoors,itemreplacer,time,lightoverlay,damagenumbers
+```
 
-1. Edit `gradle/libs.versions.toml` and/or the plugins.
-2. Bump `version` in `gradle.properties` (`26.2.x` for the current Minecraft line; a new Minecraft
-   version starts a new line).
-3. Run the Build workflow with `publish` ticked.
-4. `fleet/fleet bump-build` moves every mod to it; `fleet/fleet status` shows who is behind.
+Each folder is set up like a normal mod with its own `gradle.properties`, `README.md`, `CHANGELOG.md`
+and `common`, `fabric` and `neoforge` folders. Anything that belongs to a single mod, like its id or
+version, has to go in that mod's own `gradle.properties`. Commands use the folder name, so
+`./gradlew :graves:publishMods` releases just that mod.
+
+`family_id`, `family_icons` and `family_manual_order` in the root `gradle.properties` are shared by every
+mod in the group. The build turns them into a `Family` class in each mod, so they only ever get written
+once.
+
+Adding `bundled_mods=icepixie,treasuremob` to a mod makes it a bundle. Its jar includes those other
+mods, the same way Fabric API includes its modules. AssortedMobs uses this so Assorted Mobs can still
+be one download while each mob is also its own mod.
+
+To play with every mod in the repo at once, run `./gradlew :all:neoforge:runClient` or
+`:all:fabric:runClient`. Those runs save to `run/all-neoforge` and `run/all-fabric`.
+
+To test local changes to this repo or Assorted Lib, run `./gradlew publishToMavenLocal` in it first.
+
+## Releasing this repo
+
+1. Make your changes to `gradle/libs.versions.toml` or the plugins
+2. Bump `version` in `gradle.properties`. A new Minecraft version starts a new number line.
+3. Run the Build workflow with `publish` ticked
+4. Run `fleet/fleet bump-build` to move every mod to the new version
 
 ## The maven
 
-`maven.grimoid.com` is a static site: GitHub Pages serving the
-[AssortedMods/maven](https://github.com/AssortedMods/maven) repository. Nothing runs there, nothing is
-hosted at home, and there is no server to keep bot protection on. A publish - here or in a mod's
-workflow - checks that repository out, runs `maven-publish` into its `mods/` directory with
-`ASSORTED_MAVEN` pointing there (Gradle keeps every `maven-metadata.xml` current in a file
-repository), and pushes one commit named after the release. The push uses `MAVEN_DEPLOY_KEY`, a
-deploy key of that repository. Pages caches for up to ten minutes, so a release becomes resolvable
-within that.
+`maven.grimoid.com` is GitHub Pages serving the [AssortedMods/maven](https://github.com/AssortedMods/maven)
+repo. A publish checks that repo out, publishes into its `mods` folder and pushes one commit. The push
+uses the `MAVEN_DEPLOY_KEY` secret. Pages can take up to ten minutes to show a new release.
 
-To do the same by hand: `ASSORTED_MAVEN=../maven/mods ./gradlew publishAllPublicationsToAssortedModsRepository`
-with a checkout of the maven beside this one, then commit and push it.
+To publish by hand, check the maven out next to this repo, run
+`ASSORTED_MAVEN=../maven/mods ./gradlew publishAllPublicationsToAssortedModsRepository`, then commit and push it.
 
-The workflow's `template` job scaffolds a mod from `template/` and builds it against the freshly
-built plugin, so a change that breaks a mod build fails here first.
+The Build workflow also makes a new mod from `template/` and builds it, so a change that breaks mods
+fails here first.
 
 ## The fleet
 
 ```
-fleet/fleet status                     who is on what, who is dirty
-fleet/fleet exec git pull              anything, in every checkout
-fleet/fleet bump-build                 assortedbuild_version everywhere
-fleet/fleet pr <branch> "<message>"    one PR per dirty checkout
-fleet/fleet release all                dispatch a dry-run release everywhere (--real to upload)
-fleet/fleet new "Assorted Foo" foo "…" a new mod
+fleet/fleet status                     which mods are on what and which have changes
+fleet/fleet exec git pull              run a command in every repo
+fleet/fleet bump-build                 set assortedbuild_version everywhere
+fleet/fleet pr <branch> "<message>"    open a PR in every repo with changes
+fleet/fleet release all                dry run release everywhere (--real to upload)
+fleet/fleet release assortedgraves     release one mod from a group on its own
+fleet/fleet new "Assorted Foo" foo "…" make a new mod
 ```
 
-`pr` and `release` need the [GitHub CLI](https://cli.github.com). Checkouts are expected beside
-this repository; `FLEET_ROOT` points elsewhere.
+`pr` and `release` need the [GitHub CLI](https://cli.github.com). The repos are expected next to this one.
+Set `FLEET_ROOT` if they are somewhere else. `repos.yaml` only lists the repos. Each mod's ids come
+from its own `gradle.properties`.
 
 ## Layout of a mod
 
-`common/` holds the loader-agnostic code and both loader modules compile those sources inline. The
-NeoForge datagen writes models and language into `common/src/generated/client` and data into
-`common/src/generated/server`, for both loaders: AssortedLib's `CrossLoaderData` adds Fabric's
-load conditions and ingredient types beside NeoForge's, and Fabric has no datagen of its own.
-Gametests live in a `gametest` source set in every module and never reach a jar.
+The shared code goes in `common` and both loaders build it in. The NeoForge datagen writes the generated
+files for both loaders into `common/src/generated`. Gametests go in a `gametest` source set and never
+end up in a jar.
 
 ## License
 

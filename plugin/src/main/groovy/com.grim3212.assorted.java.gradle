@@ -33,7 +33,7 @@ java {
 
 jar {
     from(rootProject.file('LICENSE'))
-    from(rootProject.file('README.md'))
+    from(project.parent.file('README.md'))
     manifest {
         attributes([
                 'Specification-Title'     : mod_name,
@@ -52,7 +52,7 @@ jar {
 
 sourcesJar {
     from(rootProject.file('LICENSE'))
-    from(rootProject.file('README.md'))
+    from(project.parent.file('README.md'))
 }
 
 repositories {

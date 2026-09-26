@@ -25,6 +25,19 @@ final class Assorted {
         return value == null ? fallback : Boolean.parseBoolean(value.toString().trim())
     }
 
+    /**
+     * The mod directories of a family repo, from {@code assorted_mods} in the root gradle.properties.
+     * Empty for a repo that is one mod.
+     */
+    static List<String> modDirs(String assortedMods) {
+        return (assortedMods ?: '').split(',')*.trim().findAll { it }
+    }
+
+    /** A sibling module of {@code project} - its mod's {@code common}, say - in either repo layout. */
+    static Project module(Project project, String name) {
+        return project.parent.project(name)
+    }
+
     /** A version from libs.versions.toml by its alias, e.g. {@code 'fabric-api'}. */
     static String catalogVersion(Project project, String alias) {
         return project.extensions.getByType(VersionCatalogsExtension).named('libs')
