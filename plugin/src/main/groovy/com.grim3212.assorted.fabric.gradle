@@ -132,6 +132,18 @@ processResources {
 
     // Exclude datagenerator .cache directory
     exclude '.cache'
+
+    List<String> splitFrom = Assorted.splitFrom(project)
+    inputs.property 'splitFrom', splitFrom ?: []
+    if (splitFrom) {
+        // Added here rather than in each mod's template, so every part of a family gets the same rule.
+        doLast {
+            File metadata = new File(destinationDir, 'fabric.mod.json')
+            Map json = new groovy.json.JsonSlurper().parse(metadata) as Map
+            json.breaks = [(splitFrom[0]): "<${splitFrom[1]}".toString()]
+            metadata.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + '\n'
+        }
+    }
 }
 
 // Only the main compile takes common's sources. configureEach fed them to compileTestJava too,

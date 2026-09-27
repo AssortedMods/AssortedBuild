@@ -69,6 +69,11 @@ Adding `bundled_mods=icepixie,treasuremob` to a mod makes it a bundle. Its jar i
 mods, the same way Fabric API includes its modules. AssortedMobs uses this so Assorted Mobs can still
 be one download while each mob is also its own mod.
 
+A group that used to be one released mod sets `family_split_version` in the root `gradle.properties`
+to the bundle's first version after the split, like `family_split_version=10.0.0`. Every mod in the
+group then refuses to load next to that old mod from before the split, on both loaders. The bundle
+keeps the old mod's id, so it is left out.
+
 To play with every mod in the repo at once, run `./gradlew :all:neoforge:runClient` or
 `:all:fabric:runClient`. Those runs save to `run/all-neoforge` and `run/all-fabric`.
 

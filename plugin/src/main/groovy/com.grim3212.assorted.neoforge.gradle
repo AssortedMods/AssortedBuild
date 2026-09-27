@@ -146,6 +146,23 @@ tasks.register('generateModMetadata', ProcessResources) {
     expand replaceProperties
     from 'src/main/templates'
     into "${layout.buildDirectory.get()}/generated/sources/modMetadata"
+
+    List<String> splitFrom = Assorted.splitFrom(project)
+    inputs.property 'splitFrom', splitFrom ?: []
+    if (splitFrom) {
+        // Added here rather than in each mod's template, so every part of a family gets the same rule.
+        doLast {
+            new File(destinationDir, 'META-INF/neoforge.mods.toml') << """
+[[dependencies.${mod_id}]]
+modId = "${splitFrom[0]}"
+type = "incompatible"
+reason = "Versions of ${splitFrom[0]} older than ${splitFrom[1]} already have everything in this mod. Update ${splitFrom[0]} to ${splitFrom[1]} or newer, or remove it."
+versionRange = "(,${splitFrom[1]})"
+ordering = "NONE"
+side = "BOTH"
+"""
+        }
+    }
 }
 sourceSets.main.resources.srcDir tasks.named('generateModMetadata')
 neoForge.ideSyncTask tasks.named('generateModMetadata')

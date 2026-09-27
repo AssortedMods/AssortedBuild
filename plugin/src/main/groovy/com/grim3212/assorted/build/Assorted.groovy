@@ -33,6 +33,19 @@ final class Assorted {
         return (assortedMods ?: '').split(',')*.trim().findAll { it }
     }
 
+    /**
+     * The released single mod a part was split out of, as its id and the family's first split version, or null for a
+     * bundle or a family that never shipped as one mod. The part shares that mod's content, so the two cannot load together.
+     */
+    static List<String> splitFrom(Project project) {
+        Object id = project.findProperty('family_id')
+        Object version = project.findProperty('family_split_version')
+        if (id == null || version == null || project.hasProperty('bundled_mods')) {
+            return null
+        }
+        return [id.toString().trim(), version.toString().trim()]
+    }
+
     /** A sibling module of {@code project} - its mod's {@code common}, say - in either repo layout. */
     static Project module(Project project, String name) {
         return project.parent.project(name)
