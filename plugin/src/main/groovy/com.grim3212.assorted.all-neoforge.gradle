@@ -68,6 +68,14 @@ neoForge {
             gameDirectory = rootProject.file('run/all-neoforge')
             programArgument '--nogui'
         }
+        // Every mod's item icons for the documentation site in one game, rather than one launch per mod.
+        exportIcons {
+            client()
+            gameDirectory = rootProject.file('run/all-neoforge')
+            systemProperty 'assortedlib.exportIcons', rootProject.file('build/icons').absolutePath
+            def stacks = findProperty('icon_stacks_file') ?: '../assorted-mods-site/scripts/recipes/icon-stacks.json'
+            systemProperty 'assortedlib.exportIcons.stacks', rootProject.file(stacks).absolutePath
+        }
     }
 }
 

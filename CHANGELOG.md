@@ -8,6 +8,7 @@
 - Added `family_id`, `family_icons` and `family_manual_order`, which are shared by every mod in a group
 - Fixed a mod with no code of its own failing to build
 - Added `family_split_version` so the mods split out of an old mod can't be loaded next to it
+- Added `:all:neoforge:runExportIcons` to export every mod's icons for the site in one game
 - `fleet/mods.yaml` is now `fleet/repos.yaml` and only lists repos
 - `fleet release` can now release a single mod from a group
 
