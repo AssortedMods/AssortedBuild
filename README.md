@@ -61,9 +61,9 @@ and `common`, `fabric` and `neoforge` folders. Anything that belongs to a single
 version, has to go in that mod's own `gradle.properties`. Commands use the folder name, so
 `./gradlew :graves:publishMods` releases just that mod.
 
-`family_id`, `family_icons` and `family_manual_order` in the root `gradle.properties` are shared by every
-mod in the group. The build turns them into a `Family` class in each mod, so they only ever get written
-once.
+`family_id` in the root `gradle.properties` names the group. The build only uses it for
+`family_split_version` below. In code each mod keeps the id in its own `Constants` and joins the family
+with AssortedLib's `Families.join`, which gives the group its shared tab, manual section and config.
 
 Adding `bundled_mods=icepixie,treasuremob` to a mod makes it a bundle. Its jar includes those other
 mods, the same way Fabric API includes its modules. AssortedMobs uses this so Assorted Mobs can still

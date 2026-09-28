@@ -5,7 +5,7 @@
 - A repo can now build a group of mods. Each one is a folder under `mods` and is released on its own
 - Added `:all:fabric` and `:all:neoforge` runs for playing with every mod in a group at once
 - Added `bundled_mods` so one mod can include others in its jar
-- Added `family_id`, `family_icons` and `family_manual_order`, which are shared by every mod in a group
+- Added `family_id`, shared by every mod in a group
 - Fixed a mod with no code of its own failing to build
 - Added `family_split_version` so the mods split out of an old mod can't be loaded next to it
 - Added `:all:neoforge:runExportIcons` to export every mod's icons for the site in one game
