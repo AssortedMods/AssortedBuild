@@ -1,5 +1,6 @@
 import com.grim3212.assorted.build.Assorted
 import me.modmuss50.mpp.ReleaseType
+import me.modmuss50.mpp.platforms.modrinth.ModrinthEnvironment
 
 // One mod's release to Modrinth and CurseForge, applied where its common, fabric and neoforge sit.
 plugins {
@@ -8,6 +9,14 @@ plugins {
 
 def minecraftVersion = Assorted.catalogVersion(project, 'minecraft')
 def hasLib = project.hasProperty('assortedlib_version')
+
+// Which sides the mod runs on, named as Modrinth names them. CurseForge only takes a yes or no per side.
+String modEnvironment = ((findProperty('mod_environment') ?: 'client_and_server') as String).toLowerCase()
+if (!ModrinthEnvironment.values()*.name().contains(modEnvironment.toUpperCase())) {
+    throw new GradleException("mod_environment '$modEnvironment' is not one of ${ModrinthEnvironment.values()*.name()*.toLowerCase()}")
+}
+boolean runsOnClient = !(modEnvironment in ['server_only', 'dedicated_server_only'])
+boolean runsOnServer = !(modEnvironment in ['client_only', 'singleplayer_only'])
 
 /**
  * The release notes, in order of preference: -Pchangelog=..., the top section of CHANGELOG.md (from
@@ -66,6 +75,7 @@ if (findProject('fabric') != null && findProject('neoforge') != null) {
                 accessToken = providers.environmentVariable('MODRINTH_TOKEN')
                 projectId = modrinthId
                 minecraftVersions.add(minecraftVersion)
+                environment = ModrinthEnvironment.valueOf(modEnvironment.toUpperCase())
             }
 
             modrinth('modrinthFabric') {
@@ -98,8 +108,8 @@ if (findProject('fabric') != null && findProject('neoforge') != null) {
                 projectId = curseforgeId
                 projectSlug = curseforge_slug
                 minecraftVersions.add(minecraftVersion)
-                client = true
-                server = true
+                client = runsOnClient
+                server = runsOnServer
             }
 
             curseforge('curseforgeFabric') {

@@ -42,6 +42,7 @@ Everything a mod sets goes in its `gradle.properties`.
 | `neoforge_ats_enabled` | Uses the mod's NeoForge access transformer. |
 | `common_runs_enabled` | Adds client and server runs to the common module. Rarely needed. |
 | `modrinth_id`, `curseforge_id`, `curseforge_slug`, `release_type` | Where a release gets uploaded. A blank id skips that site. |
+| `mod_environment` | Which sides the mod runs on, for the release pages. `client_and_server` if left out. `client_only` and `server_only_client_optional` are the other common ones. |
 
 If a mod needs something extra it can add normal Gradle code to its own `build.gradle`. AssortedStorage
 does this for Curios.

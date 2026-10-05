@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.2.7
+
+- Added `mod_environment` so a release says which sides the mod runs on. Modrinth and CurseForge both get it
+
 ## 26.2.6
 
 - A repo can now build a group of mods. Each one is a folder under `mods` and is released on its own
