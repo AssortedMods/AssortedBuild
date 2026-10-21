@@ -6,22 +6,22 @@
 # `assortedlib_version` it actually requires (a mod declares its minimum, not the newest).
 [versions]
 java = "25"
-minecraft = "26.2"
-minecraft-range = "[26.2]"
-neoform = "26.2-2"
-neoforge = "26.2.0.82"
-neoforge-range = "[26.2.0.82,)"
+minecraft = "26.3"
+minecraft-range = "[26.3]"
+neoform = "26.3-1"
+neoforge = "26.3.0.95"
+neoforge-range = "[26.3.0.95,)"
 fabric-loader = "0.19.5"
-fabric-api = "0.160.0+26.2"
-fabric-minecraft-range = "26.2"
+fabric-api = "0.164.0+26.3"
+fabric-minecraft-range = "26.3"
 mixin = "0.8.7"
-jei-minecraft = "26.2"
-jei = "30.32.0.209"
+jei-minecraft = "26.3"
+jei = "31.16.0.87"
 
-# Tooling. Loom is what 1.17-SNAPSHOT resolved to on the day this was pinned; a snapshot under
+# Tooling. Loom is what 1.18-SNAPSHOT resolved to on the day this was pinned; a snapshot under
 # every mod at once is how one upstream push breaks the whole fleet.
-moddev = "2.0.146"
-fabric-loom = "1.17.20"
+moddev = "2.0.148"
+fabric-loom = "1.18.4"
 mod-publish = "2.2.0"
 foojay = "1.0.0"
 

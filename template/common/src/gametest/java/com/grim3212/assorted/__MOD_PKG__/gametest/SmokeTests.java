@@ -21,7 +21,7 @@ final class SmokeTests {
     }
 
     private static void modLoads(GameTestHelper helper) {
-        helper.assertTrue(helper.getLevel().getBlockState(CENTRE).isAir(), "the test box is not empty");
+        helper.assertTrue(helper.getBlockState(CENTRE).isAir(), "the test box is not empty");
         helper.succeed();
     }
 }
