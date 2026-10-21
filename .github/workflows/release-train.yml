@@ -1,0 +1,125 @@
+name: Release train
+
+# Releases mods a batch per run so CurseForge does not see them all land at once; each run waits, then
+# dispatches itself with the rest. Started by `fleet release --batch <n> --remote`.
+#
+# RELEASE_DISPATCH_TOKEN: GITHUB_TOKEN cannot dispatch other repos' workflows, so this is an org
+# token with Actions read and write on every repo, this one included.
+on:
+  workflow_dispatch:
+    inputs:
+      queue:
+        description: What is left to release, space separated repo@ref or repo@ref#dir (fleet writes it)
+        type: string
+        required: true
+      batch:
+        description: Mods per batch
+        type: string
+        default: '8'
+      every:
+        description: Minutes between batches (at most 300)
+        type: string
+        default: '60'
+      dry_run:
+        description: Rehearse the release without uploading anything
+        type: boolean
+        default: true
+      release_type:
+        description: The channel the releases go out on
+        type: choice
+        options: [ release, beta, alpha ]
+        default: release
+      version:
+        description: Version to release (blank uses each mod's gradle.properties)
+        type: string
+        default: ''
+      client_gametests:
+        description: Also run the Fabric client gametests
+        type: boolean
+        default: false
+      publish_maven:
+        description: Also publish the jars to maven.grimoid.com
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  batch:
+    name: Batch
+    runs-on: ubuntu-latest
+    # The wait is part of the job, so this has to cover the longest one --every allows.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The token is set
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASE_DISPATCH_TOKEN is not set - no Build workflow could be started"
+            exit 1
+          fi
+
+      - name: Release this batch
+        id: batch
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+          QUEUE: ${{ inputs.queue }}
+          BATCH: ${{ inputs.batch }}
+          EVERY: ${{ inputs.every }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          VERSION: ${{ inputs.version }}
+          CLIENT: ${{ inputs.client_gametests }}
+          MAVEN: ${{ inputs.publish_maven }}
+        run: |
+          [[ "$BATCH" =~ ^[1-9][0-9]*$ ]] || { echo "::error::batch must be a number above 0"; exit 1; }
+          [[ "$EVERY" =~ ^[0-9]+$ ]] && [ "$EVERY" -le 300 ] || { echo "::error::every must be 0 to 300 minutes"; exit 1; }
+          read -ra entries <<<"$QUEUE"
+          [ ${#entries[@]} -gt 0 ] || { echo "::error::the queue is empty"; exit 1; }
+          flags=( --type "$RELEASE_TYPE" --version "$VERSION" )
+          [ "$DRY_RUN" = true ] || flags+=( --real )
+          [ "$CLIENT" != true ] || flags+=( --client-gametests )
+          [ "$MAVEN" != true ] || flags+=( --publish-maven )
+          now=( "${entries[@]:0:BATCH}" )
+          rest=( "${entries[@]:BATCH}" )
+          fleet/fleet dispatch "${flags[@]}" -- "${now[@]}"
+          echo "rest=${rest[*]}" >> "$GITHUB_OUTPUT"
+          {
+            if [ "$DRY_RUN" = true ]; then echo "**Dry run** - the Build workflows only rehearse."; echo; fi
+            echo "Started:"
+            printf -- '- `%s`\n' "${now[@]}"
+            echo
+            if [ ${#rest[@]} -gt 0 ]; then
+              echo "${#rest[@]} left. The next batch starts in $EVERY minutes. Cancel this run to stop the train."
+            else
+              echo "That was the last batch."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for the next batch
+        if: steps.batch.outputs.rest != ''
+        env:
+          EVERY: ${{ inputs.every }}
+        run: sleep $((EVERY * 60))
+
+      - name: Queue the next batch
+        if: steps.batch.outputs.rest != ''
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+          REST: ${{ steps.batch.outputs.rest }}
+          BATCH: ${{ inputs.batch }}
+          EVERY: ${{ inputs.every }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          VERSION: ${{ inputs.version }}
+          CLIENT: ${{ inputs.client_gametests }}
+          MAVEN: ${{ inputs.publish_maven }}
+        run: |
+          args=( -f queue="$REST" -f batch="$BATCH" -f every="$EVERY" -f dry_run="$DRY_RUN" )
+          args+=( -f release_type="$RELEASE_TYPE" -f version="$VERSION" )
+          args+=( -f client_gametests="$CLIENT" -f publish_maven="$MAVEN" )
+          gh workflow run release-train.yml -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" "${args[@]}"

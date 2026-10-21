@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `fleet release` can release in batches with `--batch` and `--every`, waiting on this computer or with `--remote` on GitHub through the new Release train workflow
+- Family repos' Build workflows now take the `mods` input, so releasing one mod from a group works everywhere
+- A release run is never cancelled by a newer run, and runs for different mods of a group no longer cancel each other
+
 ## 26.2.7
 
 - Added `mod_environment` so a release says which sides the mod runs on. Modrinth and CurseForge both get it

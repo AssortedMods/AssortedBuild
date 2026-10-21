@@ -41,12 +41,12 @@ on:
         type: string
         default: ''
 
-# Every job sets Minecraft up from scratch, so a newer run on the same ref makes the running one a
-# waste of a runner. Keyed on the event too, so a push never cancels a manual run once triggers
-# are back on.
+# A newer run on the same ref makes the running one a waste of a runner. Keyed on the event and the
+# mods so a push never cancels a manual run and release train batches never cancel each other, and a
+# release is never cancelled since that could stop it halfway through uploading.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.mods }}
+  cancel-in-progress: ${{ !inputs.release }}
 
 permissions:
   contents: read

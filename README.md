@@ -108,12 +108,22 @@ fleet/fleet bump-build                 set assortedbuild_version everywhere
 fleet/fleet pr <branch> "<message>"    open a PR in every repo with changes
 fleet/fleet release all                dry run release everywhere (--real to upload)
 fleet/fleet release assortedgraves     release one mod from a group on its own
+fleet/fleet release all --batch 8      release 8 mods an hour, waiting here between batches
+fleet/fleet release all --batch 8 --remote   the same, with GitHub doing the waiting
 fleet/fleet new "Assorted Foo" foo "…" make a new mod
 ```
 
 `pr` and `release` need the [GitHub CLI](https://cli.github.com). The repos are expected next to this one.
 Set `FLEET_ROOT` if they are somewhere else. `repos.yaml` only lists the repos. Each mod's ids come
 from its own `gradle.properties`.
+
+Releasing every mod at once got the uploads flagged on CurseForge, so a big release should go out in
+batches. `--batch <n>` releases n mods at a time and `--every <minutes>` sets the wait (60 if left
+out). Without `--remote` the command stays running until the last batch, so the computer has to stay
+on. With `--remote` it hands the list to the Release train workflow here, which starts one batch per
+run and then queues the next run. Cancel the newest Release train run to stop it. The train needs a
+`RELEASE_DISPATCH_TOKEN` secret in this repo. That's a fine-grained token on the AssortedMods
+organization with Actions read and write on every repo.
 
 ## Layout of a mod
 

@@ -26,6 +26,9 @@ fleet - the Assorted mods as one thing
                                     (assortedgraves, that mod alone) or all (every repo)
         --real  --type <release|beta|alpha>  --version <v>  --client-gametests  --publish-maven
         --ref <branch>   (default: the checkout's current branch)
+        --batch <n>      release n mods at a time instead of everything at once
+        --every <min>    minutes between batches (default 60)
+        --remote         hand the batches to the Release train workflow instead of waiting here
   fleet new <"Mod Name"> <short> <"description"> [--into <dir>] [--lib <version>]
                                     scaffold a mod from template/, e.g.
                                     fleet new "Assorted Example" example "Adds an example."
@@ -199,7 +202,85 @@ cmd_release() {
     local target="${1:-}"
     [ -n "$target" ] || die "release needs a repo, a mod id or 'all'"
     shift
-    local dry_run=true type=release version="" client=false maven=false ref=""
+    # pass holds the flags that cmd_dispatch (and the train workflow) take as they are.
+    local pass=() ref="" batch="" every=60 remote=false
+    local dry_run=true type=release version="" client=false maven=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --real) dry_run=false; pass+=( "$1" ) ;;
+            --type) type="$2"; pass+=( "$1" "$2" ); shift ;;
+            --version) version="$2"; pass+=( "$1" "$2" ); shift ;;
+            --client-gametests) client=true; pass+=( "$1" ) ;;
+            --publish-maven) maven=true; pass+=( "$1" ) ;;
+            --ref) ref="$2"; shift ;;
+            --batch) batch="$2"; shift ;;
+            --every) every="$2"; shift ;;
+            --remote) remote=true ;;
+            *) die "release: unknown flag $1" ;;
+        esac
+        shift
+    done
+    [ -z "$batch" ] || [[ "$batch" =~ ^[1-9][0-9]*$ ]] || die "--batch must be a number above 0"
+    [[ "$every" =~ ^[0-9]+$ ]] || die "--every must be a number of minutes"
+    [ "$remote" = false ] || [ -n "$batch" ] || die "--remote needs --batch"
+    # A train run sleeps through the wait, and a GitHub job ends at six hours.
+    [ "$remote" = false ] || [ "$every" -le 300 ] || die "--every can be at most 300 with --remote"
+
+    # repo<TAB>dir; batching counts mods, so a repo splits into its mods unless "." (one whole run).
+    local list
+    if [ "$target" = all ] || repos | grep -qx "[^/]*/$target"; then
+        if [ -n "$batch" ]; then
+            list="$(mods | awk -F'\t' -v t="$target" '{ n = $1; sub(/.*\//, "", n) } t == "all" || n == t { print $1 "\t" $2 }')"
+        else
+            list="$(repos | while read -r repo; do
+                if [ "$target" = all ] || [ "${repo##*/}" = "$target" ]; then printf '%s\t.\n' "$repo"; fi
+            done)"
+        fi
+    else
+        list="$(mods | awk -F'\t' -v id="$target" '$3 == id { print $1 "\t" $2 }')"
+    fi
+    [ -n "$list" ] || die "release: $target is not a repo in repos.yaml or a mod id in a checkout"
+
+    # The queue, as repo@ref for a whole repo or repo@ref#dir for one mod of a family.
+    local entries=() repo mod use_ref
+    while IFS=$'\t' read -r repo mod; do
+        [ "$mod" != "-" ] || die "${repo##*/} is not checked out (fleet clone)"
+        use_ref="$ref"
+        [ -n "$use_ref" ] || use_ref="$(git -C "$(mod_dir "$repo")" branch --show-current 2>/dev/null || true)"
+        [ -n "$use_ref" ] || die "${repo##*/}: no --ref and no checkout to read the branch from"
+        if [ "$mod" = "." ]; then entries+=( "$repo@$use_ref" ); else entries+=( "$repo@$use_ref#$mod" ); fi
+    done <<<"$list"
+
+    if [ -z "$batch" ]; then
+        cmd_dispatch "${pass[@]}" -- "${entries[@]}"
+        return
+    fi
+
+    echo "${#entries[@]} mods in batches of $batch, $every minutes apart"
+    if [ "$remote" = true ]; then
+        gh workflow run release-train.yml -R AssortedMods/AssortedBuild --ref main \
+            -f queue="${entries[*]}" -f batch="$batch" -f every="$every" \
+            -f dry_run="$dry_run" -f release_type="$type" -f version="$version" \
+            -f client_gametests="$client" -f publish_maven="$maven"
+        echo "The Release train workflow in AssortedMods/AssortedBuild has the queue now. Cancel its newest run to stop it."
+        return
+    fi
+
+    while :; do
+        echo "--- $(date +%H:%M), ${#entries[@]} left"
+        cmd_dispatch "${pass[@]}" -- "${entries[@]:0:batch}"
+        entries=( "${entries[@]:batch}" )
+        [ ${#entries[@]} -gt 0 ] || break
+        echo "--- next batch at $(date -d "+$every minutes" +%H:%M) (Ctrl+C stops the rest)"
+        sleep $((every * 60))
+    done
+}
+
+# Starts the Build workflow for queue entries (repo@ref or repo@ref#dir). Neighboring mods of the
+# same repo share one run through its mods input. The release train workflow calls this too.
+cmd_dispatch() {
+    need gh " - https://cli.github.com"
+    local dry_run=true type=release version="" client=false maven=false
     while [ $# -gt 0 ]; do
         case "$1" in
             --real) dry_run=false ;;
@@ -207,35 +288,34 @@ cmd_release() {
             --version) version="$2"; shift ;;
             --client-gametests) client=true ;;
             --publish-maven) maven=true ;;
-            --ref) ref="$2"; shift ;;
-            *) die "release: unknown flag $1" ;;
+            --) shift; break ;;
+            *) die "dispatch: unknown flag $1" ;;
         esac
         shift
     done
+    [ $# -gt 0 ] || die "dispatch needs at least one repo@ref or repo@ref#dir"
 
-    # Each dispatch as TSV: repo, and the one mod directory for a family mod released alone.
-    local dispatches
-    if [ "$target" = all ] || repos | grep -qx "[^/]*/$target"; then
-        dispatches="$(repos | while read -r repo; do
-            if [ "$target" = all ] || [ "${repo##*/}" = "$target" ]; then printf '%s\t\n' "$repo"; fi
-        done)"
-    else
-        dispatches="$(mods | awk -F'\t' -v id="$target" '$3 == id { print $1 "\t" ($2 == "." ? "" : $2) }')"
-    fi
-    [ -n "$dispatches" ] || die "release: $target is not a repo in repos.yaml or a mod id in a checkout"
-
-    while IFS=$'\t' read -r repo mod; do
-        local dir use_ref only=()
-        dir="$(mod_dir "$repo")"
-        use_ref="$ref"
-        [ -n "$use_ref" ] || use_ref="$(git -C "$dir" branch --show-current 2>/dev/null || true)"
-        [ -n "$use_ref" ] || die "${repo##*/}: no --ref and no checkout to read the branch from"
-        [ -z "$mod" ] || only=( -f mods="$mod" )
-        echo "==> $repo@$use_ref${mod:+ ($mod)} release dry_run=$dry_run type=$type version='${version}'"
-        gh workflow run build.yml -R "$repo" --ref "$use_ref" \
-            -f release=true -f dry_run="$dry_run" -f release_type="$type" -f version="$version" \
-            -f client_gametests="$client" -f publish_maven="$maven" "${only[@]}"
-    done <<<"$dispatches"
+    # The empty entry at the end flushes the last run.
+    local entry key dir pending="" mods=""
+    for entry in "$@" ""; do
+        key="${entry%%#*}"
+        dir=""
+        [ "$key" = "$entry" ] || dir="${entry#*#}"
+        if [ -n "$pending" ] && [ -n "$mods" ] && [ -n "$dir" ] && [ "$key" = "$pending" ]; then
+            mods="$mods,$dir"
+            continue
+        fi
+        if [ -n "$pending" ]; then
+            local only=()
+            [ -z "$mods" ] || only=( -f mods="$mods" )
+            echo "==> $pending${mods:+ ($mods)} release dry_run=$dry_run type=$type version='${version}'"
+            gh workflow run build.yml -R "${pending%%@*}" --ref "${pending#*@}" \
+                -f release=true -f dry_run="$dry_run" -f release_type="$type" -f version="$version" \
+                -f client_gametests="$client" -f publish_maven="$maven" "${only[@]}"
+        fi
+        pending="$key"
+        mods="$dir"
+    done
 }
 
 # Replaces every placeholder in a scaffolded tree: file contents first (text files only - the
@@ -341,6 +421,7 @@ case "${1:-help}" in
     bump-build) shift; cmd_bump_build "$@" ;;
     pr) shift; cmd_pr "$@" ;;
     release) shift; cmd_release "$@" ;;
+    dispatch) shift; cmd_dispatch "$@" ;;
     new) shift; cmd_new "$@" ;;
     help|-h|--help) usage ;;
     *) usage >&2; exit 1 ;;
