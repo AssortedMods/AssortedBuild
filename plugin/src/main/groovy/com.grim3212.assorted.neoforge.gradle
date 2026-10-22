@@ -1,4 +1,5 @@
 import com.grim3212.assorted.build.Assorted
+import com.grim3212.assorted.build.GametestLog
 
 plugins {
     id 'com.grim3212.assorted.java'
@@ -179,3 +180,6 @@ processResources {
         expand 'mod_name': mod_name
     }
 }
+
+// Data Minecraft could not read is dropped with only a logged error, so the log is checked as well.
+GametestLog.checkAfter(project, 'runGameTestServer', file('run'))

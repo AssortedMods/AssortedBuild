@@ -1,4 +1,5 @@
 import com.grim3212.assorted.build.Assorted
+import com.grim3212.assorted.build.GametestLog
 
 plugins {
     id 'com.grim3212.assorted.java'
@@ -189,4 +190,11 @@ if (clientGametests) {
 
         runDir = layout.buildDirectory.dir('run/clientGameTest')
     }
+}
+
+// Data Minecraft could not read is dropped with only a logged error, so the logs are checked as well.
+GametestLog.checkAfter(project, 'runGameTest', file('build/gametest'))
+if (clientGametests) {
+    GametestLog.checkAfter(project, 'runClientGameTest', file('build/clientGameTest'))
+    GametestLog.checkAfter(project, 'runProductionClientGameTest', layout.buildDirectory.dir('run/clientGameTest').get().asFile)
 }

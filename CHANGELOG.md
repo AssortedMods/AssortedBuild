@@ -5,6 +5,8 @@
 - `fleet release` can release in batches with `--batch` and `--every`, waiting on this computer or with `--remote` on GitHub through the new Release train workflow
 - Family repos' Build workflows now take the `mods` input, so releasing one mod from a group works everywhere
 - A release run is never cancelled by a newer run, and runs for different mods of a group no longer cancel each other
+- Gametest runs now fail when the log has an error naming one of our mods, even if every test passed. Minecraft skips data it can't read and only logs it. `gametest_log_allow` takes a regex for errors a mod expects
+- Added `fleet mixins`, which checks every mixin against the decompiled Minecraft sources, including that a call it hooks is still made in the method it targets
 
 ## 26.2.7
 

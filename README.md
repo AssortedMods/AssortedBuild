@@ -39,6 +39,7 @@ Everything a mod sets goes in its `gradle.properties`.
 | `assortedlib_version` | The lowest Assorted Lib version the mod works with. |
 | `jei_enabled` | Builds against JEI and adds it to the dev runs. |
 | `client_gametests_enabled` | Adds the Fabric client gametests. Leave it off unless the mod has some. |
+| `gametest_log_allow` | A regex for errors the mod's gametests log on purpose. Any other logged error naming an Assorted mod fails the run. |
 | `neoforge_ats_enabled` | Uses the mod's NeoForge access transformer. |
 | `common_runs_enabled` | Adds client and server runs to the common module. Rarely needed. |
 | `modrinth_id`, `curseforge_id`, `curseforge_slug`, `release_type` | Where a release gets uploaded. A blank id skips that site. |
@@ -105,6 +106,7 @@ fails here first.
 fleet/fleet status                     which mods are on what and which have changes
 fleet/fleet exec git pull              run a command in every repo
 fleet/fleet bump-build                 set assortedbuild_version everywhere
+fleet/fleet mixins                     check every mixin against the decompiled sources (needs a build first)
 fleet/fleet pr <branch> "<message>"    open a PR in every repo with changes
 fleet/fleet release all                dry run release everywhere (--real to upload)
 fleet/fleet release assortedgraves     release one mod from a group on its own
@@ -130,6 +132,8 @@ organization with Actions read and write on every repo.
 The shared code goes in `common` and both loaders build it in. The NeoForge datagen writes the generated
 files for both loaders into `common/src/generated`. Gametests go in a `gametest` source set and never
 end up in a jar.
+A gametest run also fails if its log has an error naming one of the mods, since Minecraft skips data it
+can't read and only logs it.
 
 ## License
 

@@ -29,6 +29,9 @@ fleet - the Assorted mods as one thing
         --batch <n>      release n mods at a time instead of everything at once
         --every <min>    minutes between batches (default 60)
         --remote         hand the batches to the Release train workflow instead of waiting here
+  fleet mixins [<repo>...]          check every mixin against the decompiled sources a build left
+                                    behind, including that a hooked call is still in its method.
+                                    Needs Python and a build of each repo first
   fleet new <"Mod Name"> <short> <"description"> [--into <dir>] [--lib <version>]
                                     scaffold a mod from template/, e.g.
                                     fleet new "Assorted Example" example "Adds an example."
@@ -155,6 +158,23 @@ cmd_exec() {
         echo "==> ${repo##*/}"
         (cd "$dir" && "$@") || echo "fleet: ${repo##*/}: exit $?" >&2
     done
+}
+
+cmd_mixins() {
+    local python="" dirs=()
+    # Windows answers python3 with a Store shortcut that runs nothing, so each is tried.
+    for candidate in python3 python; do
+        if "$candidate" -c '' >/dev/null 2>&1; then python="$candidate"; break; fi
+    done
+    [ -n "$python" ] || die "mixins needs Python"
+    if [ $# -gt 0 ]; then
+        for repo in "$@"; do dirs+=("$(mod_dir "$repo")"); done
+    else
+        while read -r repo; do
+            [ -d "$(mod_dir "$repo")" ] && dirs+=("$(mod_dir "$repo")")
+        done < <(repos)
+    fi
+    "$python" "$here/mixin_check.py" "${dirs[@]}"
 }
 
 cmd_bump_build() {
@@ -423,6 +443,7 @@ case "${1:-help}" in
     release) shift; cmd_release "$@" ;;
     dispatch) shift; cmd_dispatch "$@" ;;
     new) shift; cmd_new "$@" ;;
+    mixins) shift; cmd_mixins "$@" ;;
     help|-h|--help) usage ;;
     *) usage >&2; exit 1 ;;
 esac
