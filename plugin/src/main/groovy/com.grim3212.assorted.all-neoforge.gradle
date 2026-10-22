@@ -1,6 +1,9 @@
 import com.grim3212.assorted.build.Assorted
+import com.grim3212.assorted.build.GametestLog
 
 // A family repo's mods in one NeoForge game, for trying them together: `./gradlew :all:neoforge:runClient`.
+// `:all:neoforge:runGameTestServer` runs every mod's gametests in that one game, where a test needing a
+// sibling mod stops skipping itself.
 plugins {
     id 'java'
     id 'net.neoforged.moddev'
@@ -54,6 +57,7 @@ neoForge {
             "${mod.mod_id}" {
                 sourceSet mod.sourceSets.main
                 sourceSet project(":$dir:common").sourceSets.main
+                sourceSet mod.sourceSets.gametest
             }
         }
     }
@@ -67,6 +71,10 @@ neoForge {
             server()
             gameDirectory = rootProject.file('run/all-neoforge')
             programArgument '--nogui'
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = project.file('build/gametest')
         }
         // Every mod's item icons for the documentation site in one game, rather than one launch per mod.
         exportIcons {
@@ -82,6 +90,8 @@ neoForge {
 dependencies {
     implementation "com.grim3212.assorted.lib:assortedlib-neoforge-$minecraftVersion:$assortedlib_version"
 }
+
+GametestLog.checkAfter(project, 'runGameTestServer', file('build/gametest'))
 
 // Nothing of its own to ship.
 tasks.named('jar') { enabled = false }

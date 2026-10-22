@@ -7,6 +7,9 @@
 - A release run is never cancelled by a newer run, and runs for different mods of a group no longer cancel each other
 - Gametest runs now fail when the log has an error naming one of our mods, even if every test passed. Minecraft skips data it can't read and only logs it. `gametest_log_allow` takes a regex for errors a mod expects
 - Added `fleet mixins`, which checks every mixin against the decompiled Minecraft sources, including that a call it hooks is still made in the method it targets
+- A family repo's `:all` project runs every mod's gametests in one game with `:all:fabric:runGameTest` and `:all:neoforge:runGameTestServer`, so a test that needs a sibling mod runs instead of skipping. CI runs them with the rest
+- The production client gametest run loads JEI for mods with `jei_enabled`, so a JEI test runs in CI too
+- `runProductionClientGameTest` waits for every mod's asset download, so it works in a family repo where more than one mod has client gametests
 
 ## 26.2.7
 

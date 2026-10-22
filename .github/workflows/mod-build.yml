@@ -123,6 +123,8 @@ jobs:
             **/${{ matrix.run_dir }}/logs/
             **/${{ matrix.run_dir }}/crash-reports/
             **/${{ matrix.run_dir }}/report.xml
+            build/all/*/build/gametest/logs/
+            build/all/*/build/gametest/crash-reports/
 
   datagen:
     name: Datagen

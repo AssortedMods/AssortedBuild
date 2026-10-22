@@ -78,6 +78,8 @@ keeps the old mod's id, so it is left out.
 
 To play with every mod in the repo at once, run `./gradlew :all:neoforge:runClient` or
 `:all:fabric:runClient`. Those runs save to `run/all-neoforge` and `run/all-fabric`.
+`./gradlew :all:fabric:runGameTest` and `:all:neoforge:runGameTestServer` run every mod's gametests
+in that one game, so a test that needs a sibling mod runs instead of skipping.
 
 To test local changes to this repo or Assorted Lib, run `./gradlew publishToMavenLocal` in it first.
 

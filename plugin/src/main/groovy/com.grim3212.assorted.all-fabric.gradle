@@ -1,6 +1,9 @@
 import com.grim3212.assorted.build.Assorted
+import com.grim3212.assorted.build.GametestLog
 
 // A family repo's mods in one Fabric game, for trying them together: `./gradlew :all:fabric:runClient`.
+// `:all:fabric:runGameTest` runs every mod's gametests in that one game, where a test needing a sibling mod
+// stops skipping itself.
 plugins {
     id 'java'
     id 'net.fabricmc.fabric-loom'
@@ -50,7 +53,10 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${Assorted.catalogVersion(project, 'fabric-loader')}"
     implementation "net.fabricmc.fabric-api:fabric-api:${Assorted.catalogVersion(project, 'fabric-api')}"
     implementation "com.grim3212.assorted.lib:assortedlib-fabric-$minecraftVersion:$assortedlib_version"
-    modDirs.each { implementation project(":$it:fabric") }
+    modDirs.each {
+        implementation project(":$it:fabric")
+        runtimeOnly rootProject.project(":$it:fabric").sourceSets.gametest.output
+    }
 }
 
 loom {
@@ -59,6 +65,9 @@ loom {
             Project mod = project(":$dir:fabric")
             "${mod.mod_id}" {
                 sourceSet('main', mod)
+            }
+            "${mod.mod_id}_gametest" {
+                sourceSet('gametest', mod)
             }
         }
     }
@@ -77,8 +86,17 @@ loom {
             ideConfigGenerated(true)
             runDir('../../../run/all-fabric')
         }
+        gameTest {
+            server()
+            setConfigName('Fabric Game Test (all mods)')
+            vmArg '-Dfabric-api.gametest'
+            vmArg "-Dfabric-api.gametest.report-file=${file('build/gametest/report.xml')}"
+            runDir('build/gametest')
+        }
     }
 }
+
+GametestLog.checkAfter(project, 'runGameTest', file('build/gametest'))
 
 // Nothing of its own to ship.
 tasks.named('jar') { enabled = false }

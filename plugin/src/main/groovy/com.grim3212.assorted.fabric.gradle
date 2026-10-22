@@ -44,6 +44,10 @@ dependencies {
         if (hasLib) {
             productionRuntimeMods "com.grim3212.assorted.lib:assortedlib-fabric-${minecraft_version}:${assortedlib_version}"
         }
+        // So a client test of the JEI integration runs against JEI in CI as it does locally.
+        if (Assorted.flag(project, 'jei_enabled')) {
+            productionRuntimeMods "mezz.jei:jei-${jei_minecraft_version}-fabric:${jei_version}"
+        }
     }
 }
 
@@ -189,6 +193,9 @@ if (clientGametests) {
         mods.from(tasks.named('gametestJar'))
 
         runDir = layout.buildDirectory.dir('run/clientGameTest')
+
+        // Loom keeps one asset cache for every mod in a family repo, so each mod's download has to finish first.
+        rootProject.allprojects { other -> dependsOn(other.tasks.matching { it.name == 'downloadAssets' }) }
     }
 }
 
