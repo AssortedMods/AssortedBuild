@@ -42,13 +42,28 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-build
 
+      # A new Minecraft line has no AssortedLib until this repo is published, so Lib's own build tests the plugin then.
+      - name: An AssortedLib exists for this Minecraft version
+        id: lib
+        run: |
+          minecraft="$(sed -n 's/^minecraft = "\(.*\)"/\1/p' gradle/libs.versions.toml)"
+          if curl -fsS -o /dev/null "https://maven.grimoid.com/mods/com/grim3212/assorted/lib/assortedlib-common-$minecraft/maven-metadata.xml"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No AssortedLib is published for Minecraft $minecraft yet, so the template is not built"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to the local maven
+        if: steps.lib.outputs.found == 'true'
         run: ./gradlew publishToMavenLocal --stacktrace
 
       - name: Scaffold a mod
+        if: steps.lib.outputs.found == 'true'
         run: fleet/fleet new "Assorted Example" example "A mod scaffolded to check the template." --into "$RUNNER_TEMP/AssortedExample"
 
       - name: Build it
+        if: steps.lib.outputs.found == 'true'
         working-directory: ${{ runner.temp }}/AssortedExample
         run: ./gradlew build --stacktrace
 

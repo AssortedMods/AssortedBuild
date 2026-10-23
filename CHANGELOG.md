@@ -10,6 +10,7 @@
 - A family repo's `:all` project runs every mod's gametests in one game with `:all:fabric:runGameTest` and `:all:neoforge:runGameTestServer`, so a test that needs a sibling mod runs instead of skipping. CI runs them with the rest
 - The production client gametest run loads JEI for mods with `jei_enabled`, so a JEI test runs in CI too
 - `runProductionClientGameTest` waits for every mod's asset download, so it works in a family repo where more than one mod has client gametests
+- The Build workflow's template check is skipped on a new Minecraft version until an Assorted Lib is published for it, instead of failing
 
 ## 26.2.7
 

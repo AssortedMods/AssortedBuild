@@ -100,7 +100,8 @@ To publish by hand, check the maven out next to this repo, run
 `ASSORTED_MAVEN=../maven/mods ./gradlew publishAllPublicationsToAssortedModsRepository`, then commit and push it.
 
 The Build workflow also makes a new mod from `template/` and builds it, so a change that breaks mods
-fails here first.
+fails here first. On a new Minecraft version it skips that until an Assorted Lib for that version is
+published, since the template needs one.
 
 ## The fleet
 
