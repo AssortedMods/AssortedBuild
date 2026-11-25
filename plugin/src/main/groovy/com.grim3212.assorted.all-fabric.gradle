@@ -6,11 +6,15 @@ import com.grim3212.assorted.build.GametestLog
 // stops skipping itself.
 plugins {
     id 'java'
-    id 'net.fabricmc.fabric-loom'
+    id 'net.fabricmc.fabric-loom-remap'
 }
 
 def familyDirs = Assorted.modDirs(findProperty('assorted_mods') as String)
 def minecraftVersion = Assorted.catalogVersion(project, 'minecraft')
+
+// The game runs on this project's toolchain, and Gradle's own Java is newer than 1.21.1 can run on:
+// its LWJGL dies on Java 25 with an unsupported JNI version. So the run takes the catalog's Java.
+java.toolchain.languageVersion = JavaLanguageVersion.of(Assorted.catalogVersion(project, 'java') as int)
 
 repositories {
     mavenLocal()
@@ -50,12 +54,20 @@ def modDirs = familyDirs.findAll { !project(":$it:fabric").findProperty('bundled
 
 dependencies {
     minecraft "com.mojang:minecraft:$minecraftVersion"
-    implementation "net.fabricmc:fabric-loader:${Assorted.catalogVersion(project, 'fabric-loader')}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${Assorted.catalogVersion(project, 'fabric-api')}"
-    implementation "com.grim3212.assorted.lib:assortedlib-fabric-$minecraftVersion:$assortedlib_version"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${Assorted.catalogVersion(project, 'fabric-loader')}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${Assorted.catalogVersion(project, 'fabric-api')}"
+    modImplementation "com.grim3212.assorted.lib:assortedlib-fabric-$minecraftVersion:$assortedlib_version"
+    // A project's default artifact is its remapped, intermediary jar, which a dev run on Mojang names
+    // cannot load, so each mod comes in through Loom's namedElements instead. Its own mod
+    // dependencies are remapped inside that project only, so they are not taken through it either;
+    // what the mods depend on is remapped here, JEI included when any of them uses it.
     modDirs.each {
-        implementation project(":$it:fabric")
+        implementation(project(path: ":$it:fabric", configuration: 'namedElements')) { transitive = false }
         runtimeOnly rootProject.project(":$it:fabric").sourceSets.gametest.output
+    }
+    if (modDirs.any { Assorted.flag(rootProject.project(":$it:fabric"), 'jei_enabled') }) {
+        modImplementation "mezz.jei:jei-${Assorted.catalogVersion(project, 'jei-minecraft')}-fabric:${Assorted.catalogVersion(project, 'jei')}"
     }
 }
 
@@ -98,5 +110,7 @@ loom {
 
 GametestLog.checkAfter(project, 'runGameTest', file('build/gametest'))
 
-// Nothing of its own to ship.
+// Nothing of its own to ship. The remapping plugin's remapJar reads jar's output, so it goes too, or
+// `./gradlew build` fails on the missing dev jar.
 tasks.named('jar') { enabled = false }
+tasks.matching { it.name in ['remapJar', 'remapSourcesJar'] }.configureEach { enabled = false }

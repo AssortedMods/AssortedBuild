@@ -12,6 +12,10 @@ plugins {
 def familyDirs = Assorted.modDirs(findProperty('assorted_mods') as String)
 def minecraftVersion = Assorted.catalogVersion(project, 'minecraft')
 
+// The game runs on this project's toolchain, and Gradle's own Java is newer than 1.21.1 can run on:
+// its LWJGL dies on Java 25 with an unsupported JNI version. So the run takes the catalog's Java.
+java.toolchain.languageVersion = JavaLanguageVersion.of(Assorted.catalogVersion(project, 'java') as int)
+
 repositories {
     mavenLocal()
     maven {

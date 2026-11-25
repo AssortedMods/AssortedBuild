@@ -5,18 +5,18 @@
 # Per-mod versions stay in each mod's gradle.properties: its own `version`, and the
 # `assortedlib_version` it actually requires (a mod declares its minimum, not the newest).
 [versions]
-java = "25"
-minecraft = "26.3"
-minecraft-range = "[26.3]"
-neoform = "26.3-1"
-neoforge = "26.3.0.95"
-neoforge-range = "[26.3.0.95,)"
+java = "21"
+minecraft = "1.21.1"
+minecraft-range = "[1.21.1]"
+neoform = "1.21.1-20240808.144430"
+neoforge = "21.1.267"
+neoforge-range = "[21.1.267,)"
 fabric-loader = "0.19.5"
-fabric-api = "0.164.0+26.3"
-fabric-minecraft-range = "26.3"
+fabric-api = "0.116.18+1.21.1"
+fabric-minecraft-range = "~1.21.1"
 mixin = "0.8.7"
-jei-minecraft = "26.3"
-jei = "31.16.0.87"
+jei-minecraft = "1.21.1"
+jei = "19.76.1.481"
 
 # Tooling. Loom is what 1.18-SNAPSHOT resolved to on the day this was pinned; a snapshot under
 # every mod at once is how one upstream push breaks the whole fleet.

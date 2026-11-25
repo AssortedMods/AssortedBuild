@@ -25,7 +25,9 @@ dependencies {
     implementation libs.foojay.resolver
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(libs.versions.java.get() as int)
+// The plugin runs in the Gradle daemon, not in Minecraft, and Loom 1.18 is built for Java 25, so this
+// stays on 25 while the catalog's `java` (what the mods compile for) is 21 on this line.
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 // The settings plugin reads its own version from this to fetch the matching catalog.
 processResources {

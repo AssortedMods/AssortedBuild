@@ -41,21 +41,21 @@ neoForge {
             programArgument '--nogui'
         }
 
-        // Two data runs with SEPARATE output roots. GatherDataEvent split into .Client and .Server,
-        // MDG 2.x has no combined run type, and each run prunes anything in its output it did not
-        // generate - pointing both at one tree made the second delete the first's output.
+        // Two data runs with SEPARATE output roots, so the layout matches the 26.x line. 1.21.1 has
+        // one GatherDataEvent and one data run type; vanilla's --client and --server flags pick
+        // which half each run writes, and each run's cache prunes only its own tree.
         clientData {
-            clientData()
+            data()
             gameDirectory = project.file('run')
-            programArguments.addAll '--mod', mod_id, '--all',
+            programArguments.addAll '--mod', mod_id, '--client',
                     '--output', file('../common/src/generated/client/').getAbsolutePath(),
                     '--existing', file('../common/src/main/resources/').getAbsolutePath()
         }
 
         serverData {
-            serverData()
+            data()
             gameDirectory = project.file('run')
-            programArguments.addAll '--mod', mod_id, '--all',
+            programArguments.addAll '--mod', mod_id, '--server',
                     '--output', file('../common/src/generated/server/').getAbsolutePath(),
                     '--existing', file('../common/src/main/resources/').getAbsolutePath()
         }
